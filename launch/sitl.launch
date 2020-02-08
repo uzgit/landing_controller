@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<launch>
+
+	<!-- *********************************************************************** -->
+
+	<arg name="camInfo" default="/iris/camera/camera_info" doc="camera_info topic"/>
+	<arg name="camRaw" default="/iris/camera/image_raw" doc="image_raw topic"/>
+
+	<arg name="idBits" default="2" doc="Number of encoded bits"/>
+	<arg name="idSamples" default="360" doc="Number of samples to detect ID"/>
+	<arg name="hammingDist" default="1" doc="Hamming distance used for ID"/>
+	<arg name="maxMarkers" default="100" doc="Maximum possible amount of markers to be tracked"/>
+	<arg name="useGui" default="true" doc="Whether to use GUI"/>
+
+	<arg name="fontPath" value="$(find whycon_ros)/etc/font.ttf"/>
+	<arg name="calibDefPath" value="$(find whycon_ros)/etc/default.cal"/>
+
+	<node pkg="whycon_ros" type="whycon_ros" name="whycon_ros" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" >
+
+		<remap from="/camera/camera_info" to="$(arg camInfo)"/>
+		<remap from="/camera/image_raw" to="$(arg camRaw)"/>
+
+		<param name="useGui" value="$(arg useGui)"/>
+		<param name="idBits" value="$(arg idBits)"/>
+		<param name="idSamples" value="$(arg idSamples)"/>
+		<param name="hammingDist" value="$(arg hammingDist)"/>
+		<param name="maxMarkers" value="$(arg maxMarkers)"/>
+
+	</node>
+
+	<!-- *********************************************************************** -->
+
+	<node pkg="gimbal_controller" type="gimbal_controller" name="gimbal_controller_node" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" >
+	</node>
+	
+	<!-- *********************************************************************** -->
+
+        <arg name="fcu_url" default="udp://127.0.0.1:14551@14555" />
+        <arg name="gcs_url" default="" />
+        <arg name="tgt_system" default="1" />
+        <arg name="tgt_component" default="1" />
+        <arg name="log_output" default="screen" />
+        <arg name="fcu_protocol" default="v2.0" />
+        <arg name="respawn_mavros" default="false" />
+
+        <include file="$(find mavros)/launch/node.launch">
+                <arg name="pluginlists_yaml" value="$(find mavros)/launch/apm_pluginlists.yaml" />
+                <arg name="config_yaml" value="$(find mavros)/launch/apm_config.yaml" />
+
+                <arg name="fcu_url" value="$(arg fcu_url)" />
+                <arg name="gcs_url" value="$(arg gcs_url)" />
+                <arg name="tgt_system" value="$(arg tgt_system)" />
+                <arg name="tgt_component" value="$(arg tgt_component)" />
+                <arg name="log_output" value="$(arg log_output)" />
+                <arg name="fcu_protocol" value="$(arg fcu_protocol)" />
+                <arg name="respawn_mavros" default="$(arg respawn_mavros)" />
+        </include>
+
+	<!-- *********************************************************************** -->
+
+	<node pkg="landing_controller" type="landing_controller" name="landing_controller_node" output="screen" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" >
+	</node>
+
+</launch>
