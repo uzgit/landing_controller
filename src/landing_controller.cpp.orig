@@ -1,0 +1,201 @@
+#include <ros/ros.h>
+#include <mavros_msgs/LandingTarget.h>
+#include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
+#include <std_msgs/Float64.h>
+#include <geometry_msgs/Point.h>
+#include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Vector3.h>
+#include <visualization_msgs/MarkerArray.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2/transform_datatypes.h>
+#include <sensor_msgs/Imu.h>
+#include <tf2/LinearMath/Transform.h>
+#include <cmath>
+
+// for Gazebo simulation
+#include <gazebo_msgs/LinkStates.h>
+
+using namespace std;
+
+enum LANDING_MODE
+{
+	NONE = 0,	// no landing markers detected
+	GUIDED,		// landing markers detected, but still not in landing mode
+	APPROACH,	// landing markers detected, initial approach
+	SUB_EPSILON,	// close in x and y dimensions
+	FIX,		// fixed with small x/y distances
+	DESCENT,	// fixed and descending
+	TOUCHDOWN,	// on the landing pad
+	ENGINE_STOP,	// landed
+	ABORT		// landing failure
+};
+
+ros::Publisher landing_pad_position_publisher;
+ros::Publisher landing_pad_global_position_publisher;
+
+geometry_msgs::Pose landing_pad_camera_pose;
+geometry_msgs::Pose landing_pad_global_pose;
+
+mavros_msgs::LandingTarget landing_target_message;
+ros::Publisher landing_target_publisher;
+int frame_id = 1;
+
+// bit IDs of landing pad 
+int landing_pad_id[2] = {1, 2};
+
+// timing
+ros::Time last_detection_time(0);
+ros::Duration abort_time(0.5);
+
+// for Gazebo simulation
+tf2::Transform iris_base_link_transform;
+tf2::Transform gimbal_base_link_transform;
+tf2::Transform gimbal_tilt_link_transform;
+const std::string iris_base_link_name   = "iris_demo::iris_demo::iris::base_link";
+const std::string gimbal_base_link_name = "iris_demo::iris_demo::gimbal_small_2d::base_link";
+const std::string gimbal_tilt_link_name = "iris_demo::iris_demo::gimbal_small_2d::tilt_link";
+
+void link_states_callback(const gazebo_msgs::LinkStates::ConstPtr& msg)
+{
+	for(int i = 0; i < msg->name.size(); i ++)
+	{
+		if( msg->name[i] == iris_base_link_name )
+		{
+			tf2::fromMsg(msg->pose[i], iris_base_link_transform);
+		}
+		else if( msg->name[i] == gimbal_base_link_name )
+		{
+			tf2::fromMsg(msg->pose[i], gimbal_base_link_transform);
+		}
+		else if( msg->name[i] == gimbal_tilt_link_name )
+		{
+			tf2::fromMsg(msg->pose[i], gimbal_tilt_link_transform);
+		}
+	}
+}
+
+void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
+{
+	bool detection = false;
+
+	int num_markers = msg->markers.size();
+	double x, y, z;
+	double rotation_x, rotation_y, rotation_z, rotation_w;
+
+	geometry_msgs::Pose buffer;
+
+	int i = 0;
+	while( i < num_markers && ! detection )
+	{
+		int id = msg->markers[i].id;
+		buffer = msg->markers[i].pose;
+
+		int ii = 0;
+		while( ii < 2 && landing_pad_id[ii] != id )
+		{
+			ii ++;
+		}
+		if( ii < 2 )
+		{
+			detection = true;
+		}
+
+		i ++;
+	}
+
+	if( detection )
+	{
+		landing_pad_camera_pose = buffer;
+
+		last_detection_time = ros::Time::now();
+	}
+}
+
+/*
+void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
+{
+        tf2::convert(msg->orientation, imu_quaternion);
+        tf2::Matrix3x3(imu_quaternion).getEulerYPR(imu_yaw, imu_pitch, imu_roll);
+}
+
+void camera_imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
+{
+        tf2::convert(msg->orientation, camera_imu_quaternion);
+        tf2::Matrix3x3(camera_imu_quaternion).getEulerYPR(camera_yaw, camera_pitch, camera_roll);
+}
+*/
+
+/*
+void send_landing_target_message()
+{
+//	double magnitude = sqrt( pow(landing_pad_relative_pose.position.x, 2) + pow(landing_pad_relative_pose.position.y, 2) + pow(landing_pad_relative_pose.position.z, 2));
+
+	landing_target_message.header.stamp.sec = (int)ros::Time::now().sec;
+	landing_target_message.header.stamp.nsec = (int)ros::Time::now().nsec;
+	landing_target_message.header.frame_id = 149;
+	landing_target_message.target_num = 1;
+	landing_target_message.frame = mavros_msgs::LandingTarget::LOCAL_NED;
+	landing_target_message.type = mavros_msgs::LandingTarget::VISION_FIDUCIAL;
+//	landing_target_message.angle[0] = asin( landing_pad_relative_pose.position.y / magnitude );
+//	landing_target_message.angle[1] = asin( landing_pad_relative_pose.position.x / magnitude );
+//	landing_target_message.angle[0] = atan( landing_pad_relative_pose.position.y / landing_pad_relative_pose.position.z );
+	landing_target_message.angle[1] = atan( landing_pad_relative_pose.position.x / landing_pad_relative_pose.position.z );
+	landing_target_message.angle[0] *= -1;
+	landing_target_message.angle[1] *= -1;
+//	ROS_INFO("landing target angle: (%0.3f, %0.3f)", landing_target_message.angle[0], landing_target_message.angle[1]);
+
+//	landing_target_message.distance = magnitude;
+	landing_target_message.size[0] = 0.01;
+	landing_target_message.size[1] = 0.01;
+
+	frame_id ++;
+
+	landing_target_publisher.publish(landing_target_message);
+}
+*/
+int main(int argc, char** argv)
+{
+	// init and say hi
+	ros::init(argc, argv, "landing_controller");
+	ROS_INFO("Started landing_controller!");
+
+	// create subscribers and publishers
+	ros::NodeHandle node_handle;
+        ros::Subscriber visual_subscriber = node_handle.subscribe("/whycon_ros/visual", 1000, visual_callback);
+//	ros::Subscriber camera_imu_subscriber = node_handle.subscribe("/iris/camera/imu", 1000, camera_imu_callback);
+//	ros::Subscriber imu_subscriber = node_handle.subscribe("/iris/imu", 1000, imu_callback);
+//	landing_target_publisher = node_handle.advertise<mavros_msgs::LandingTarget>("/mavros/landing_target/raw", 1000);
+	landing_pad_position_publisher = node_handle.advertise<geometry_msgs::Vector3>("/landing_pad/relative_position", 1000);
+
+	// for Gazebo simulation
+/**************************************************************************************************************************************************************************/
+	ros::Subscriber link_state_subscriber = node_handle.subscribe("/gazebo/link_states", 1000, link_states_callback);
+	landing_pad_global_position_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_position", 1000);
+/**************************************************************************************************************************************************************************/
+	
+	ros::Rate loop_rate(20);
+	while( ros::ok() )
+	{
+		// callbacks
+		ros::spinOnce();
+
+		tf2::Transform gimbal_to_global = gimbal_tilt_link_transform * gimbal_base_link_transform * iris_base_link_transform;
+		geometry_msgs::TransformStamped gimbal_to_global_stamped;
+	       	gimbal_to_global_stamped.transform = tf2::toMsg(gimbal_to_global);
+
+		tf2::doTransform(landing_pad_camera_pose, landing_pad_global_pose, gimbal_to_global_stamped);
+
+		if( ros::Time::now() - last_detection_time < abort_time )
+		{
+			landing_pad_global_position_publisher.publish(landing_pad_global_pose);
+		;
+//			send_landing_target_message();
+		}
+
+		loop_rate.sleep();
+	}
+
+	return 0;
+}
