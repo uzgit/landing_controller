@@ -206,7 +206,7 @@ int main(int argc, char** argv)
 		if( ros::Time::now() - last_detection_time < abort_time )
 		{
 			landing_pad_relative_pose_publisher.publish(landing_pad_relative_pose);
-			std::cout << "(" << landing_pad_relative_pose.orientation.w << ", " << landing_pad_relative_pose.orientation.x << ", " << landing_pad_relative_pose.orientation.y << ", " << landing_pad_relative_pose.orientation.z << ")" << std::endl;
+//			std::cout << "(" << landing_pad_relative_pose.orientation.w << ", " << landing_pad_relative_pose.orientation.x << ", " << landing_pad_relative_pose.orientation.y << ", " << landing_pad_relative_pose.orientation.z << ")" << std::endl;
 
 			send_target_position_local_pose_stamped();
 
