@@ -13,8 +13,11 @@
 #include <sensor_msgs/Imu.h>
 #include <tf2/LinearMath/Transform.h>
 #include <cmath>
+#include <nav_msgs/Odometry.h>
+#include <tf2_ros/transform_broadcaster.h>
 
 // for Gazebo simulation
+#define simulator_visualize 1
 #include <gazebo_msgs/LinkStates.h>
 #include <gazebo_msgs/LinkState.h>
 
@@ -23,16 +26,27 @@ using namespace std;
 ros::Publisher landing_target_raw_publisher;
 mavros_msgs::LandingTarget landing_target_message;
 
+ros::Publisher landing_pad_camera_odom_publisher;
 ros::Publisher landing_pad_relative_pose_publisher;
 ros::Publisher landing_pad_global_pose_publisher;
+ros::Publisher landing_pad_global_pose_filtered_publisher;
 ros::Publisher setpoint_position_local_publisher;
 ros::Publisher landing_pad_position_publisher;
+ros::Publisher imu_data_forwarding_publisher;
+ros::Publisher camera_imu_data_forwarding_publisher;
+ros::Publisher visual_odometry_publisher;
 
 geometry_msgs::Pose landing_pad_camera_pose;
 geometry_msgs::Pose landing_pad_relative_pose;
 geometry_msgs::Pose landing_pad_global_pose;
+geometry_msgs::Pose landing_pad_global_pose_filtered;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped;
 geometry_msgs::PoseStamped local_position_pose_stamped;
+
+nav_msgs::Odometry landing_pad_camera_odom_message;
+nav_msgs::Odometry visual_odometry_message;
+nav_msgs::Odometry visual_odometry_filtered_message;
+
 
 // bit IDs of landing pad 
 int landing_pad_id[2] = {1, 2};
@@ -52,6 +66,12 @@ geometry_msgs::Pose iris_pose;
 gazebo_msgs::LinkState link_state_message;
 ros::Publisher landing_pad_estimate_publisher;
 
+void odometry_filtered_callback(const nav_msgs::Odometry::ConstPtr msg)
+{
+	landing_pad_global_pose_filtered = msg->pose.pose;
+	landing_pad_global_pose_filtered_publisher.publish(landing_pad_global_pose_filtered);
+}
+
 void local_position_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
 	local_position_pose_stamped = *msg;
@@ -61,12 +81,34 @@ void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 {
 	tf2::convert(msg->orientation, imu_orientation);
 	imu_transform.setRotation(imu_orientation);
+	buffer.header.frame_id = "imu_link";
+	imu_data_forwarding_publisher.publish(buffer);
+
+	static tf2_ros::TransformBroadcaster transform_broadcaster;
+	geometry_msgs::TransformStamped transform_stamped_message;
+	transform_stamped_message.header.stamp = ros::Time::now();
+	transform_stamped_message.header.frame_id = "base_link";
+	transform_stamped_message.child_frame_id = "imu_link";
+	transform_stamped_message.transform.rotation = msg->orientation;
+	transform_broadcaster.sendTransform(transform_stamped_message);
 }
 
 void camera_imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 {
+	sensor_msgs::Imu buffer = *msg;
+
 	tf2::convert(msg->orientation, camera_imu_orientation);
 	camera_imu_transform.setRotation(camera_imu_orientation);
+	buffer.header.frame_id = "camera_imu_link";
+	camera_imu_data_forwarding_publisher.publish(buffer);
+
+	static tf2_ros::TransformBroadcaster transform_broadcaster;
+	geometry_msgs::TransformStamped transform_stamped_message;
+	transform_stamped_message.header.stamp = ros::Time::now();
+	transform_stamped_message.header.frame_id = "base_link";
+	transform_stamped_message.child_frame_id = "camera_imu_link";
+	transform_stamped_message.transform.rotation = msg->orientation;
+	transform_broadcaster.sendTransform(transform_stamped_message);
 }
 
 int seq = 0;
@@ -145,6 +187,13 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 		landing_pad_camera_pose.position.y = buffer.position.x;
 		landing_pad_camera_pose.position.z = -buffer.position.y;
 		last_detection_time = ros::Time::now();
+
+		landing_pad_camera_odom_message.header.stamp = ros::Time::now();
+		landing_pad_camera_odom_message.header.frame_id = "camera_imu_link";
+		landing_pad_camera_odom_message.child_frame_id = "base_link";
+		landing_pad_camera_odom_message.pose.pose = landing_pad_camera_pose;
+		for(int i = 0; i < 36; i ++){ landing_pad_camera_odom_message.pose.covariance[i] = 900; }
+		landing_pad_camera_odom_publisher.publish(landing_pad_camera_odom_message);
 	}
 }
 
@@ -154,6 +203,7 @@ int main(int argc, char** argv)
 	ros::init(argc, argv, "landing_controller");
 	ROS_INFO("Started landing_controller!");
 
+
 	// create subscribers and publishers
 	ros::NodeHandle node_handle;
         ros::Subscriber visual_subscriber = node_handle.subscribe("/whycon_ros/visual", 1000, visual_callback);
@@ -161,11 +211,19 @@ int main(int argc, char** argv)
 	ros::Subscriber imu_subscriber = node_handle.subscribe("/iris/imu", 1000, imu_callback);
 	landing_target_raw_publisher = node_handle.advertise<mavros_msgs::LandingTarget>("/mavros/landing_target/raw", 1000);
 	
+//	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/camera_pose", 1000);
 	landing_pad_relative_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/relative_pose", 1000);
 	landing_pad_global_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_pose", 1000);
+	landing_pad_global_pose_filtered_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_pose_filtered", 1000);
 
 	ros::Subscriber local_position_pose_subscriber = node_handle.subscribe("/mavros/local_position/pose", 1000, local_position_pose_callback);
 	setpoint_position_local_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 1000);
+
+	// for filtering
+	landing_pad_camera_odom_publisher = node_handle.advertise<nav_msgs::Odometry>("/odometry/camera/landing_pad_pose", 1000);
+	imu_data_forwarding_publisher = node_handle.advertise<sensor_msgs::Imu>("/imu_data", 1000);
+	visual_odometry_publisher = node_handle.advertise<nav_msgs::Odometry>("/visual_odometry", 1000);
+	ros::Subscriber odometry_filtered_subscriber = node_handle.subscribe("/odometry/filtered", 1000, odometry_filtered_callback);
 
 	// /landing_pad/global_position is for the landing_pad_estimate_plugin
 //	landing_pad_position_publisher = node_handle.advertise<geometry_msgs::Vector3>("/landing_pad/global_position", 1000);
@@ -208,8 +266,19 @@ int main(int argc, char** argv)
 			landing_pad_relative_pose_publisher.publish(landing_pad_relative_pose);
 //			std::cout << "(" << landing_pad_relative_pose.orientation.w << ", " << landing_pad_relative_pose.orientation.x << ", " << landing_pad_relative_pose.orientation.y << ", " << landing_pad_relative_pose.orientation.z << ")" << std::endl;
 
-			send_target_position_local_pose_stamped();
+			// Direct the drone towards the landing pad
+//			send_target_position_local_pose_stamped();
 
+//			visual_odometry_message.header.stamp = ros::Time::now();
+//			visual_odometry_message.pose.pose = landing_pad_relative_pose;
+//			visual_odometry_message.header.frame_id = "odom";
+	//		for(int i = 0; i < 36; i ++)
+	//		{
+	//			visual_odometry_message.pose.covariance[i] = 999;
+	//		}
+//			visual_odometry_publisher.publish(visual_odometry_message);
+
+#if simulator_visualize
 			// for visual update: mavros uses ENU, gazebo uses NWD
 			landing_pad_global_pose.position.x = local_position_pose_stamped.pose.position.y + landing_pad_relative_pose.position.x;
 			landing_pad_global_pose.position.y = -local_position_pose_stamped.pose.position.x + landing_pad_relative_pose.position.y;
@@ -250,7 +319,7 @@ int main(int argc, char** argv)
 			position.z = max(iris_pose.position.z + landing_pad_relative_pose.position.z, 0.1);
 			landing_pad_position_publisher.publish(position);
 */
-
+#endif
 			// don't use this because the landing_target protocol leads to unpredictable behavior
 //			send_landing_target_message();
 		}
