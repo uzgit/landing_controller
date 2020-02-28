@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   gimbal_controller
   mavros
   mavros_msgs
+  tf2_ros
   whycon_ros
 )
 

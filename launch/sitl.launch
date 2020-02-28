@@ -2,7 +2,8 @@
 <launch>
 
 	<!--node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="0 0 0 0 0 0 1 whycon_frame camera_imu_link 100 " /-->
-	<!--node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="0 0 0 0 0 0 1 imu_link camera_imu_link 100 " required="true"/-->
+	<!--node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="0 0 0 0 0.707 0 0.707 base_link base_link_NED 100 " required="true"/-->
+	<node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="0 0 0 0 -1.5708 0 base_link_NED base_link 100" required="true"/>
 
 	<!-- *********************************************************************** -->
 
