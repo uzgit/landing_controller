@@ -82,18 +82,6 @@ void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 	tf2::convert(msg->orientation, imu_buffer.orientation);
 	imu_buffer.header.frame_id = "imu_link";
 	imu_data_forwarding_publisher.publish(imu_buffer);
-
-	//		    x, y, z, w
-	tf2::Quaternion NED(0, 0.707, 0, 0.707);
-/*
-	static tf2_ros::TransformBroadcaster transform_broadcaster;
-	geometry_msgs::TransformStamped transform_stamped_message;
-	transform_stamped_message.header.stamp = ros::Time::now();
-	transform_stamped_message.header.frame_id = "base_link";
-	transform_stamped_message.child_frame_id = "base_link_NED";
-	transform_stamped_message.transform.rotation = NED * (msg->orientation).inverse();
-	transform_broadcaster.sendTransform(transform_stamped_message);
-*/
 }
 
 void camera_imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
@@ -160,67 +148,38 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 	// transform pose in camera frame to pose relative to the drone in NED
 	try
 	{
-		// works when transforming from origin=camera_imu_frame
+		// works when transforming from origin frame_id = camera_imu_frame or camera_frame
 		landing_pad_relative_pose_stamped = transform_buffer.transform(landing_pad_camera_pose, "base_link", ros::Duration(0.2));
-
-/*
-		// get the current rotation of the camera
-		geometry_msgs::TransformStamped camera_transform_stamped_message = transform_buffer.lookupTransform("base_link", "camera_frame", ros::Time(0));
-		tf2::Quaternion camera_rotation;
-		tf2::fromMsg(camera_transform_stamped_message.transform.rotation, camera_rotation);
-
-		// use transform broadcaster
-		static tf2_ros::TransformBroadcaster transform_broadcaster;
-		
-		// generate a transform from base_link to NED
-		geometry_msgs::TransformStamped transform_stamped_message;
-
-		// set header
-		transform_stamped_message.header.stamp = ros::Time::now();
-		transform_stamped_message.header.frame_id = "base_link";
-		transform_stamped_message.child_frame_id = "camera_NED";
-		
-		// target orientation
-		tf2::Quaternion NED(0, 0.707, 0, 0.707);
-		
-		// get required additional rotation
-		// subtract camera_rotation from NED_rotation
-		tf2::Quaternion NED_correction = NED * camera_rotation.inverse();
-
-		double y,p,r;
-		tf2::Matrix3x3(camera_rotation).getEulerYPR(y, p, r);
-		ROS_INFO("gimbal < %0.2f, %0.2f, %0.2f >", y, p, r);
-		tf2::Matrix3x3(camera_imu_orientation).getEulerYPR(y, p, r);
-		ROS_INFO("imu    < %0.2f, %0.2f, %0.2f >", y, p, r);
-
-		// set rotation to the rotation to get from camera to NED
-		transform_stamped_message.transform.rotation = tf2::toMsg(NED);
-		transform_broadcaster.sendTransform(transform_stamped_message);
-
-
-		tf2::Quaternion undo_rotation;
-		tf2::fromMsg(landing_pad_relative_pose_stamped.pose.orientation, undo_rotation);
-		tf2::Transform undo_rotation_transform;
-		undo_rotation_transform.setRotation( undo_rotation.inverse() );
-
-		geometry_msgs::TransformStamped undo_rotation_transform_stamped;
-		undo_rotation_transform_stamped.transform = tf2::toMsg(undo_rotation_transform);
-
-		tf2::doTransform(landing_pad_relative_pose_stamped, landing_pad_relative_pose_stamped, undo_rotation_transform_stamped);
-*/
-
-/*
-		tf2::Transform camera_to_world( camera_imu_orientation );
-		tf2::Transform gimbal_to_drone = camera_to_world;
-		geometry_msgs::TransformStamped gimbal_to_drone_stamped;
-	       	gimbal_to_drone_stamped.transform = tf2::toMsg(gimbal_to_drone);
-		tf2::doTransform(landing_pad_camera_pose, landing_pad_relative_pose_stamped, gimbal_to_drone_stamped);
-*/
 	}
 	catch( tf2::TransformException &exception )
 	{
 		ROS_WARN("%s", exception.what());
 	}
+}
+
+// used with global yaw
+int seq = 0;
+void send_target_position_local_pose_stamped()
+{
+	seq ++;
+
+	landing_pad_relative_pose_stamped.header.seq   = seq;
+	landing_pad_relative_pose_stamped.header.stamp = ros::Time::now();
+//	landing_pad_relative_pose_stamped.header.frame_id = "relative_pose";
+
+	landing_pad_relative_pose_stamped.pose.orientation = landing_pad_relative_pose.orientation;
+	
+	// relative pose is in NWD, but we need ENU
+	landing_pad_relative_pose_stamped.pose.position.x = - landing_pad_relative_pose.position.y;
+	landing_pad_relative_pose_stamped.pose.position.y = landing_pad_relative_pose.position.x;
+
+	landing_pad_relative_pose_stamped.pose.position.x += local_position_pose_stamped.pose.position.x;
+	landing_pad_relative_pose_stamped.pose.position.y += local_position_pose_stamped.pose.position.y;
+	landing_pad_relative_pose_stamped.pose.position.z += local_position_pose_stamped.pose.position.z;
+
+	landing_pad_relative_pose_stamped.pose.position.z = 10;
+	
+	setpoint_position_local_publisher.publish(landing_pad_relative_pose_stamped);
 }
 
 int main(int argc, char** argv)
@@ -230,20 +189,18 @@ int main(int argc, char** argv)
 	ROS_INFO("Started landing_controller!");
 
 
-	// create subscribers and publishers
+	// create subscribers
 	ros::NodeHandle node_handle;
         ros::Subscriber visual_subscriber = node_handle.subscribe("/whycon_ros/visual", 1000, visual_callback);
 	ros::Subscriber camera_imu_subscriber = node_handle.subscribe("/iris/camera/imu", 1000, camera_imu_callback);
 	ros::Subscriber imu_subscriber = node_handle.subscribe("/iris/imu", 1000, imu_callback);
-	landing_target_raw_publisher = node_handle.advertise<mavros_msgs::LandingTarget>("/mavros/landing_target/raw", 1000);
+	ros::Subscriber local_position_pose_subscriber = node_handle.subscribe("/mavros/local_position/pose", 1000, local_position_pose_callback);
 	
-//	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/camera_pose", 1000);
+	// create publishers
 	landing_pad_relative_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/relative_pose", 1000);
 	landing_pad_global_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_pose", 1000);
 	landing_pad_relative_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/relative_pose_stamped", 1000);
 	landing_pad_global_pose_filtered_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_pose_filtered", 1000);
-
-	ros::Subscriber local_position_pose_subscriber = node_handle.subscribe("/mavros/local_position/pose", 1000, local_position_pose_callback);
 	setpoint_position_local_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 1000);
 
 	// for filtering
@@ -255,7 +212,6 @@ int main(int argc, char** argv)
 	// for transforms
 	tf2_ros::TransformListener transform_listener(transform_buffer);
 
-/**************************************************************************************************************/
 	ros::Rate loop_rate(20);
 	while( ros::ok() )
 	{
@@ -268,10 +224,9 @@ int main(int argc, char** argv)
 
 			// publish relative pose
 			landing_pad_relative_pose_publisher.publish(landing_pad_relative_pose);
-//			std::cout << "(" << landing_pad_relative_pose.orientation.w << ", " << landing_pad_relative_pose.orientation.x << ", " << landing_pad_relative_pose.orientation.y << ", " << landing_pad_relative_pose.orientation.z << ")" << std::endl;
 
 			// Direct the drone towards the landing pad
-//			send_target_position_local_pose_stamped();
+			send_target_position_local_pose_stamped();
 
 			// for visual update: mavros uses ENU, gazebo uses NWD
 			landing_pad_global_pose.position.x = local_position_pose_stamped.pose.position.y + landing_pad_relative_pose.position.x;
@@ -285,7 +240,6 @@ int main(int argc, char** argv)
 
 		loop_rate.sleep();
 	}
-/**************************************************************************************************************/
 
 	return 0;
 }
