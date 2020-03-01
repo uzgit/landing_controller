@@ -30,6 +30,7 @@ ros::Publisher landing_pad_camera_odom_publisher;
 ros::Publisher landing_pad_relative_pose_publisher;
 ros::Publisher landing_pad_relative_pose_stamped_publisher;
 ros::Publisher landing_pad_global_pose_publisher;
+ros::Publisher landing_pad_global_pose_stamped_publisher;
 ros::Publisher landing_pad_global_pose_filtered_publisher;
 ros::Publisher setpoint_position_local_publisher;
 ros::Publisher landing_pad_position_publisher;
@@ -42,6 +43,8 @@ geometry_msgs::Pose landing_pad_relative_pose;
 geometry_msgs::Pose landing_pad_global_pose;
 geometry_msgs::Pose landing_pad_global_pose_filtered;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped;
+geometry_msgs::PoseStamped landing_pad_relative_pose_absolute_yaw_stamped;
+geometry_msgs::PoseStamped landing_pad_global_pose_stamped;
 geometry_msgs::PoseStamped local_position_pose_stamped;
 
 nav_msgs::Odometry landing_pad_camera_odom_message;
@@ -71,9 +74,28 @@ void odometry_filtered_callback(const nav_msgs::Odometry::ConstPtr msg)
 	landing_pad_global_pose_filtered_publisher.publish(landing_pad_global_pose_filtered);
 }
 
+
 void local_position_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
+	// this message is in END (east, north, down)
 	local_position_pose_stamped = *msg;
+
+	static tf2_ros::TransformBroadcaster transform_broadcaster;
+	geometry_msgs::TransformStamped transform_stamped_message;
+	transform_stamped_message.header.stamp = ros::Time::now();
+	transform_stamped_message.header.frame_id = "global_ned";
+	transform_stamped_message.child_frame_id = "local_ned_absolute_yaw";
+
+	// we go from END to NED
+	transform_stamped_message.transform.translation.x = msg->pose.position.y;
+	transform_stamped_message.transform.translation.y = msg->pose.position.x;
+	transform_stamped_message.transform.translation.z = msg->pose.position.z;
+	transform_stamped_message.transform.rotation.w = 1;
+	transform_stamped_message.transform.rotation.x = 0;
+	transform_stamped_message.transform.rotation.y = 0;
+	transform_stamped_message.transform.rotation.z = 0;
+
+	transform_broadcaster.sendTransform(transform_stamped_message);
 }
 
 void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
@@ -82,6 +104,24 @@ void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 	tf2::convert(msg->orientation, imu_buffer.orientation);
 	imu_buffer.header.frame_id = "imu_link";
 	imu_data_forwarding_publisher.publish(imu_buffer);
+
+	static tf2_ros::TransformBroadcaster transform_broadcaster;
+	geometry_msgs::TransformStamped transform_stamped_message;
+	transform_stamped_message.header.stamp = ros::Time::now();
+	transform_stamped_message.header.frame_id = "local_ned_absolute_yaw";
+	transform_stamped_message.child_frame_id = "local_ned";
+
+	tf2::Quaternion orientation, yaw;
+	tf2::fromMsg(msg->orientation, orientation);
+
+	double y, p, r;
+	tf2::Matrix3x3(orientation).getEulerYPR(y, p, r);
+
+	yaw.setRPY(0, 0, -y);
+	geometry_msgs::Quaternion yaw_message = tf2::toMsg(yaw);
+
+	transform_stamped_message.transform.rotation = yaw_message;
+	transform_broadcaster.sendTransform(transform_stamped_message);
 }
 
 void camera_imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
@@ -99,7 +139,6 @@ void camera_imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 	transform_stamped_message.child_frame_id = "camera_imu_frame";
 	transform_stamped_message.transform.rotation = msg->orientation;
 	transform_broadcaster.sendTransform(transform_stamped_message);
-
 }
 
 void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
@@ -134,26 +173,12 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 	if( detection )
 	{
 		landing_pad_camera_pose.header.stamp = ros::Time::now();
-//		landing_pad_camera_pose.header.frame_id = "camera_imu_frame";
 		landing_pad_camera_pose.header.frame_id = "camera_frame";
 		landing_pad_camera_pose.pose = buffer;
 		landing_pad_camera_pose.pose.position.x = buffer.position.z;
 		landing_pad_camera_pose.pose.position.y = buffer.position.x;
 		landing_pad_camera_pose.pose.position.z = -buffer.position.y;
 		last_detection_time = ros::Time::now();
-	}
-
-	// determine relative position of landing pad even with no detection (in case detection is momentarily lost)
-	// main loop will determine whether or not to publish based on timing
-	// transform pose in camera frame to pose relative to the drone in NED
-	try
-	{
-		// works when transforming from origin frame_id = camera_imu_frame or camera_frame
-		landing_pad_relative_pose_stamped = transform_buffer.transform(landing_pad_camera_pose, "base_link", ros::Duration(0.2));
-	}
-	catch( tf2::TransformException &exception )
-	{
-		ROS_WARN("%s", exception.what());
 	}
 }
 
@@ -188,9 +213,10 @@ int main(int argc, char** argv)
 	ros::init(argc, argv, "landing_controller");
 	ROS_INFO("Started landing_controller!");
 
-
-	// create subscribers
+	// create node handle
 	ros::NodeHandle node_handle;
+	
+	// create subscribers
         ros::Subscriber visual_subscriber = node_handle.subscribe("/whycon_ros/visual", 1000, visual_callback);
 	ros::Subscriber camera_imu_subscriber = node_handle.subscribe("/iris/camera/imu", 1000, camera_imu_callback);
 	ros::Subscriber imu_subscriber = node_handle.subscribe("/iris/imu", 1000, imu_callback);
@@ -199,6 +225,7 @@ int main(int argc, char** argv)
 	// create publishers
 	landing_pad_relative_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/relative_pose", 1000);
 	landing_pad_global_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_pose", 1000);
+	landing_pad_global_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/global_pose_stamped", 1000);
 	landing_pad_relative_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/relative_pose_stamped", 1000);
 	landing_pad_global_pose_filtered_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_pose_filtered", 1000);
 	setpoint_position_local_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 1000);
@@ -210,7 +237,7 @@ int main(int argc, char** argv)
 	ros::Subscriber odometry_filtered_subscriber = node_handle.subscribe("/odometry/filtered", 1000, odometry_filtered_callback);
 
 	// for transforms
-	tf2_ros::TransformListener transform_listener(transform_buffer);
+	static tf2_ros::TransformListener transform_listener(transform_buffer);
 
 	ros::Rate loop_rate(20);
 	while( ros::ok() )
@@ -220,22 +247,28 @@ int main(int argc, char** argv)
 	
 		if( ros::Time::now() - last_detection_time < abort_time )
 		{
-			// transform whycon pose to relative pose
+			// transform pose in camera frame to pose relative to the drone in NED
+			try
+			{
+				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "local_ned", ros::Duration(0.1));
+				landing_pad_relative_pose_absolute_yaw_stamped	= transform_buffer.transform(landing_pad_relative_pose_stamped, "local_ned_absolute_yaw", ros::Duration(0.1));
+
+				landing_pad_global_pose_stamped.pose.position.x = landing_pad_relative_pose_absolute_yaw_stamped.pose.position.x + local_position_pose_stamped.pose.position.y;
+				landing_pad_global_pose_stamped.pose.position.y = landing_pad_relative_pose_absolute_yaw_stamped.pose.position.y + local_position_pose_stamped.pose.position.x;
+				landing_pad_global_pose_stamped.pose.position.z = max(local_position_pose_stamped.pose.position.z - landing_pad_relative_pose_absolute_yaw_stamped.pose.position.z, 0.1);
+			}
+			catch( tf2::TransformException &exception )
+			{
+				ROS_WARN("%s", exception.what());
+			}
 
 			// publish relative pose
 			landing_pad_relative_pose_publisher.publish(landing_pad_relative_pose);
+			landing_pad_relative_pose_stamped_publisher.publish(landing_pad_relative_pose_stamped);
+			landing_pad_global_pose_stamped_publisher.publish(landing_pad_global_pose_stamped);
 
 			// Direct the drone towards the landing pad
-			send_target_position_local_pose_stamped();
-
-			// for visual update: mavros uses ENU, gazebo uses NWD
-			landing_pad_global_pose.position.x = local_position_pose_stamped.pose.position.y + landing_pad_relative_pose.position.x;
-			landing_pad_global_pose.position.y = -local_position_pose_stamped.pose.position.x + landing_pad_relative_pose.position.y;
-			landing_pad_global_pose.position.z = max(local_position_pose_stamped.pose.position.z + landing_pad_relative_pose.position.z, 0.05);
-//			landing_pad_global_pose.orientation = landing_pad_relative_pose.orientation;
-
-			landing_pad_relative_pose_stamped_publisher.publish(landing_pad_relative_pose_stamped);
-			landing_pad_global_pose_publisher.publish(landing_pad_global_pose);
+			//send_target_position_local_pose_stamped();
 		}
 
 		loop_rate.sleep();
