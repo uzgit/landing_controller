@@ -1,5 +1,5 @@
 #include <ros/ros.h>
-#include <mavros_msgs/LandingTarget.h>
+#include <mavros_msgs/PositionTarget.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Float64.h>
@@ -24,16 +24,15 @@
 
 using namespace std;
 
-ros::Publisher landing_target_raw_publisher;
-mavros_msgs::LandingTarget landing_target_message;
-
 ros::Publisher landing_pad_camera_odom_publisher;
+ros::Publisher landing_pad_camera_pose_publisher;
+ros::Publisher landing_pad_base_link_pose_stamped_publisher;
 ros::Publisher landing_pad_relative_pose_publisher;
 ros::Publisher landing_pad_relative_pose_stamped_publisher;
 ros::Publisher landing_pad_global_pose_publisher;
 ros::Publisher landing_pad_global_pose_stamped_publisher;
 ros::Publisher landing_pad_global_pose_filtered_publisher;
-ros::Publisher setpoint_position_local_publisher;
+ros::Publisher setpoint_raw_local_publisher;
 ros::Publisher landing_pad_position_publisher;
 ros::Publisher imu_data_forwarding_publisher;
 ros::Publisher camera_imu_data_forwarding_publisher;
@@ -43,6 +42,7 @@ geometry_msgs::PoseStamped landing_pad_camera_pose;
 geometry_msgs::Pose landing_pad_relative_pose;
 geometry_msgs::Pose landing_pad_global_pose;
 geometry_msgs::Pose landing_pad_global_pose_filtered;
+geometry_msgs::PoseStamped landing_pad_base_link_pose_stamped;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped;
 geometry_msgs::PoseStamped landing_pad_relative_pose_absolute_yaw_stamped;
 geometry_msgs::PoseStamped landing_pad_global_pose_stamped;
@@ -56,6 +56,8 @@ sensor_msgs::Imu imu_buffer;
 sensor_msgs::Imu camera_imu_buffer;
 
 tf2_ros::Buffer transform_buffer;
+
+bool stopped = false;
 
 // bit IDs of landing pad 
 int landing_pad_id[2] = {1, 2};
@@ -76,7 +78,6 @@ void odometry_filtered_callback(const nav_msgs::Odometry::ConstPtr msg)
 	landing_pad_global_pose_filtered = msg->pose.pose;
 	landing_pad_global_pose_filtered_publisher.publish(landing_pad_global_pose_filtered);
 }
-
 
 void local_position_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
@@ -144,6 +145,8 @@ void camera_imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 	transform_broadcaster.sendTransform(transform_stamped_message);
 }
 
+/*
+// original
 void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 {
 	bool detection = false;
@@ -186,38 +189,152 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 		last_detection_time = ros::Time::now();
 	}
 }
+*/
+
+void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
+{
+	bool detection = false;
+
+	int num_markers = msg->markers.size();
+	double x, y, z;
+	double rotation_x, rotation_y, rotation_z, rotation_w;
+
+	geometry_msgs::Pose buffer;
+
+	int i = 0;
+	while( i < num_markers && ! detection )
+	{
+		int id = msg->markers[i].id;
+		buffer = msg->markers[i].pose;
+
+		int ii = 0;
+		while( ii < 2 && landing_pad_id[ii] != id )
+		{
+			ii ++;
+		}
+		if( ii < 2 )
+		{
+			detection = true;
+		}
+
+		i ++;
+	}
+
+	if( detection )
+	{
+		landing_pad_camera_pose.header.stamp = ros::Time::now();
+		landing_pad_camera_pose.header.frame_id = "camera_frame";
+		landing_pad_camera_pose.pose = buffer;
+		
+		landing_pad_camera_pose.pose.position.x = buffer.position.z;
+		landing_pad_camera_pose.pose.position.y = buffer.position.x;
+		landing_pad_camera_pose.pose.position.z = buffer.position.y;
+		
+		last_detection_time = ros::Time::now();
+
+		landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
+	}
+}
+
+
+/*
+# Message for SET_POSITION_TARGET_LOCAL_NED
+#
+# Some complex system requires all feautures that mavlink
+# message provide. See issue #402.
+
+std_msgs/Header header
+
+uint8 coordinate_frame
+uint8 FRAME_LOCAL_NED = 1
+uint8 FRAME_LOCAL_OFFSET_NED = 7
+uint8 FRAME_BODY_NED = 8
+uint8 FRAME_BODY_OFFSET_NED = 9
+
+uint16 type_mask
+uint16 IGNORE_PX = 1 # Position ignore flags
+uint16 IGNORE_PY = 2
+uint16 IGNORE_PZ = 4
+uint16 IGNORE_VX = 8 # Velocity vector ignore flags
+uint16 IGNORE_VY = 16
+uint16 IGNORE_VZ = 32
+uint16 IGNORE_AFX = 64 # Acceleration/Force vector ignore flags
+uint16 IGNORE_AFY = 128
+uint16 IGNORE_AFZ = 256
+uint16 FORCE = 512 # Force in af vector flag
+uint16 IGNORE_YAW = 1024
+uint16 IGNORE_YAW_RATE = 2048
+
+geometry_msgs/Point position
+geometry_msgs/Vector3 velocity
+geometry_msgs/Vector3 acceleration_or_force
+float32 yaw
+float32 yaw_rate
+*/
+
+/*
+std_msgs/Header header
+uint8 coordinate_frame
+uint16 type_mask
+geometry_msgs/Point position
+geometry_msgs/Vector3 velocity
+geometry_msgs/Vector3 acceleration_or_force
+float32 yaw
+float32 yaw_rate
+*/
 
 // local NED is unusable because it does implicate GPS
 // used with global yaw
-int seq = 0;
-void send_target_position_local_pose_stamped()
+void approach(geometry_msgs::PoseStamped target_position)
 {
-	seq ++;
+	mavros_msgs::PositionTarget buffer;
 
-//	geometry_msgs::PoseStamped buffer = landing_pad_relative_pose_stamped;
-	geometry_msgs::PoseStamped buffer = landing_pad_global_pose_stamped;
-//	geometry_msgs::PoseStamped buffer = landing_pad_relative_pose_absolute_yaw_stamped;
-	geometry_msgs::PoseStamped buffer2 = buffer;
-
-	buffer.header.seq   = seq;
 	buffer.header.stamp = ros::Time::now();
-	buffer.header.frame_id = "12";
+	buffer.header.frame_id = "world";
+	buffer.coordinate_frame = 8; // FRAME_BODY_NED
+	buffer.type_mask = 4088; // ignore everything except positional arguments x, y
 
-//	buffer.pose.orientation = landing_pad_relative_pose.orientation;
-	
-	// relative pose is in NWD, but we need ENU
-//	buffer.pose.position.x = landing_pad_relative_pose.position.y;
-//	buffer.pose.position.y = landing_pad_relative_pose.position.x;
-/*
-	buffer.pose.position.x += local_position_pose_stamped.pose.position.x;
-	buffer.pose.position.y += local_position_pose_stamped.pose.position.y;
-	buffer.pose.position.z += local_position_pose_stamped.pose.position.z;
-*/
-	buffer.pose.position.x = buffer2.pose.position.y;
-	buffer.pose.position.y = buffer2.pose.position.x;
-	buffer.pose.position.z = 10;
-	
-	setpoint_position_local_publisher.publish(buffer);
+	buffer.position.x = target_position.pose.position.y;
+	buffer.position.y = target_position.pose.position.x;
+	buffer.position.z = 0;
+
+	setpoint_raw_local_publisher.publish(buffer);
+}
+
+void hold_plane_position()
+{
+	mavros_msgs::PositionTarget buffer;
+
+	buffer.header.stamp = ros::Time::now();
+	buffer.header.frame_id = "world";
+	buffer.coordinate_frame = 8; // FRAME_BODY_NED
+	buffer.type_mask = 4039; // ignore everything except positional arguments x, y
+
+	buffer.velocity.x = 0;
+	buffer.velocity.y = 0;
+	buffer.velocity.z = 0;
+
+	setpoint_raw_local_publisher.publish(buffer);
+}
+
+void descend_in_place()
+{
+	mavros_msgs::PositionTarget buffer;
+
+	buffer.header.stamp = ros::Time::now();
+	buffer.header.frame_id = "world";
+	buffer.coordinate_frame = 8; // FRAME_BODY_NED
+	buffer.type_mask = 4039; // ignore everything except z velocity
+
+	buffer.velocity.z = -0.5;
+
+	setpoint_raw_local_publisher.publish(buffer);
+
+}
+
+double plane_distance_to(geometry_msgs::PoseStamped pose)
+{
+	return sqrt( pow(pose.pose.position.x, 2) +  pow(pose.pose.position.x, 2) );
 }
 
 int main(int argc, char** argv)
@@ -237,11 +354,13 @@ int main(int argc, char** argv)
 	
 	// create publishers
 	landing_pad_relative_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/relative_pose", 1000);
+	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
 	landing_pad_global_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_pose", 1000);
 	landing_pad_global_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/global_pose_stamped", 1000);
+	landing_pad_base_link_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/base_link_pose_stamped", 1000);
 	landing_pad_relative_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/relative_pose_stamped", 1000);
 	landing_pad_global_pose_filtered_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/global_pose_filtered", 1000);
-	setpoint_position_local_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 1000);
+	setpoint_raw_local_publisher = node_handle.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 1000);
 
 	// for filtering
 	landing_pad_camera_odom_publisher = node_handle.advertise<nav_msgs::Odometry>("/odometry/camera/landing_pad_pose", 1000);
@@ -264,7 +383,11 @@ int main(int argc, char** argv)
 			try
 			{
 				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "local_ned", ros::Duration(0.1));
+
+				landing_pad_base_link_pose_stamped		= transform_buffer.transform(landing_pad_relative_pose_stamped, "base_link", ros::Duration(0.1));
+
 				landing_pad_relative_pose_absolute_yaw_stamped	= transform_buffer.transform(landing_pad_relative_pose_stamped, "local_ned_absolute_yaw", ros::Duration(0.1));
+				landing_pad_base_link_pose_stamped_publisher.publish(landing_pad_relative_pose_absolute_yaw_stamped);
 
 				landing_pad_global_pose_stamped.pose.position.x = landing_pad_relative_pose_absolute_yaw_stamped.pose.position.x + local_position_pose_stamped.pose.position.y;
 				landing_pad_global_pose_stamped.pose.position.y = -landing_pad_relative_pose_absolute_yaw_stamped.pose.position.y - local_position_pose_stamped.pose.position.x;
@@ -282,9 +405,27 @@ int main(int argc, char** argv)
 
 			// Direct the drone towards the landing pad
 			
-			if( ros::Time::now() - last_target_send_time >= ros::Duration(0.1) )
+			if( ros::Time::now() - last_target_send_time >= ros::Duration(0.5) )
 			{
 				last_target_send_time = ros::Time::now();
+				/*
+				double distance = plane_distance_to(landing_pad_relative_pose_stamped);
+				ROS_INFO("%f", distance); 
+				if( distance >= 0.6 )
+				{
+					approach(landing_pad_relative_pose_stamped);
+				}
+				else// if( ! stopped )
+				{
+					descend_in_place();
+					//hold_plane_position();
+				//	stopped = true;
+					if( distance < 0.3 )
+					{
+						descend();
+					}
+				}
+				*/
 			}
 		}
 
