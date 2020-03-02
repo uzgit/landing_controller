@@ -6,6 +6,7 @@
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/Vector3.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -178,11 +179,6 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 		landing_pad_camera_pose.header.frame_id = "camera_frame";
 		landing_pad_camera_pose.pose = buffer;
 		
-		// original
-//		landing_pad_camera_pose.pose.position.x = buffer.position.z;
-//		landing_pad_camera_pose.pose.position.y = buffer.position.x;
-//		landing_pad_camera_pose.pose.position.z = -buffer.position.y;
-		
 		landing_pad_camera_pose.pose.position.x = buffer.position.z;
 		landing_pad_camera_pose.pose.position.y = buffer.position.x;
 		landing_pad_camera_pose.pose.position.z = -buffer.position.y;
@@ -191,6 +187,7 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 	}
 }
 
+// local NED is unusable because it does implicate GPS
 // used with global yaw
 int seq = 0;
 void send_target_position_local_pose_stamped()
@@ -198,22 +195,26 @@ void send_target_position_local_pose_stamped()
 	seq ++;
 
 //	geometry_msgs::PoseStamped buffer = landing_pad_relative_pose_stamped;
-	geometry_msgs::PoseStamped buffer = landing_pad_relative_pose_absolute_yaw_stamped;
+	geometry_msgs::PoseStamped buffer = landing_pad_global_pose_stamped;
+//	geometry_msgs::PoseStamped buffer = landing_pad_relative_pose_absolute_yaw_stamped;
+	geometry_msgs::PoseStamped buffer2 = buffer;
 
 	buffer.header.seq   = seq;
 	buffer.header.stamp = ros::Time::now();
-	buffer.header.frame_id = "map";
+	buffer.header.frame_id = "12";
 
-	buffer.pose.orientation = landing_pad_relative_pose.orientation;
+//	buffer.pose.orientation = landing_pad_relative_pose.orientation;
 	
 	// relative pose is in NWD, but we need ENU
-	buffer.pose.position.x = - landing_pad_relative_pose.position.y;
-	buffer.pose.position.y = landing_pad_relative_pose.position.x;
-
+//	buffer.pose.position.x = landing_pad_relative_pose.position.y;
+//	buffer.pose.position.y = landing_pad_relative_pose.position.x;
+/*
 	buffer.pose.position.x += local_position_pose_stamped.pose.position.x;
 	buffer.pose.position.y += local_position_pose_stamped.pose.position.y;
 	buffer.pose.position.z += local_position_pose_stamped.pose.position.z;
-
+*/
+	buffer.pose.position.x = buffer2.pose.position.y;
+	buffer.pose.position.y = buffer2.pose.position.x;
 	buffer.pose.position.z = 10;
 	
 	setpoint_position_local_publisher.publish(buffer);
@@ -251,7 +252,7 @@ int main(int argc, char** argv)
 	// for transforms
 	static tf2_ros::TransformListener transform_listener(transform_buffer);
 
-	ros::Rate loop_rate(20);
+	ros::Rate loop_rate(40);
 	while( ros::ok() )
 	{
 		// callbacks
@@ -265,9 +266,6 @@ int main(int argc, char** argv)
 				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "local_ned", ros::Duration(0.1));
 				landing_pad_relative_pose_absolute_yaw_stamped	= transform_buffer.transform(landing_pad_relative_pose_stamped, "local_ned_absolute_yaw", ros::Duration(0.1));
 
-//				landing_pad_global_pose_stamped.pose.position.x = landing_pad_relative_pose_absolute_yaw_stamped.pose.position.x + local_position_pose_stamped.pose.position.y;
-//				landing_pad_global_pose_stamped.pose.position.y = landing_pad_relative_pose_absolute_yaw_stamped.pose.position.y + local_position_pose_stamped.pose.position.x;
-//				landing_pad_global_pose_stamped.pose.position.z = max(local_position_pose_stamped.pose.position.z - landing_pad_relative_pose_absolute_yaw_stamped.pose.position.z, 0.1);
 				landing_pad_global_pose_stamped.pose.position.x = landing_pad_relative_pose_absolute_yaw_stamped.pose.position.x + local_position_pose_stamped.pose.position.y;
 				landing_pad_global_pose_stamped.pose.position.y = -landing_pad_relative_pose_absolute_yaw_stamped.pose.position.y - local_position_pose_stamped.pose.position.x;
 				landing_pad_global_pose_stamped.pose.position.z = max(local_position_pose_stamped.pose.position.z - landing_pad_relative_pose_absolute_yaw_stamped.pose.position.z, 0.1);
@@ -284,11 +282,9 @@ int main(int argc, char** argv)
 
 			// Direct the drone towards the landing pad
 			
-			if( ros::Time::now() - last_target_send_time >= ros::Duration(2) )
+			if( ros::Time::now() - last_target_send_time >= ros::Duration(0.1) )
 			{
-				//ROS_INFO("Sending target position message...");
 				last_target_send_time = ros::Time::now();
-				//send_target_position_local_pose_stamped();
 			}
 		}
 
