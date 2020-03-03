@@ -1,10 +1,7 @@
 <?xml version="1.0"?>
 <launch>
 
-	<node pkg="tf" type="static_transform_publisher" name="local_edn_transform_publisher" args="0 0 0 0 1 0 0 body_edn base_link 100 " />
-	<node pkg="tf" type="static_transform_publisher" name="local_ned_absolute_yaw_transform_publisher" args="0 0 0 0 1 0 0 local_ned_absolute_yaw local_nwd_absolute_yaw 100 " />
-	<!--node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="0 0 0 0 0.707 0 0.707 base_link base_link_NED 100 " required="true"/-->
-	<!--node pkg="tf" type="static_transform_publisher" name="link2_broadcaster" args="0 0 0 0 -1.5708 0 base_link_NED base_link 100" required="true"/-->
+	<!--node pkg="tf" type="static_transform_publisher" name="static_transform_publisher_example" args="x y z x y z w parent_frame child_frame frequency " /-->
 
 	<!-- *********************************************************************** -->
 
