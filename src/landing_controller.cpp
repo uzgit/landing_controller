@@ -73,6 +73,33 @@ ros::Publisher landing_pad_estimate_publisher;
 
 tf2::Quaternion camera_imu_orientation;
 
+geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped &pose_in )
+{
+
+	geometry_msgs::PoseStamped pose_out;
+	geometry_msgs::PoseStamped buffer = pose_in;
+
+	tf2::Stamped< tf2::Transform > buffer_transform;
+	tf2::Quaternion rotation;
+	tf2::fromMsg(buffer.pose.orientation, rotation);
+
+//	tf2::Vector3 axis = rotation.getAxis();
+//	ROS_INFO("(%0.2f, %0.2f, %0.2f)", axis.x(), axis.y(), axis.z());
+
+	tf2::Quaternion rotation_inverse = rotation.inverse();
+	buffer_transform.setRotation(rotation_inverse);
+
+	geometry_msgs::TransformStamped transform_stamped_buffer = tf2::toMsg(buffer_transform);
+	tf2::doTransform(buffer, pose_out, transform_stamped_buffer);
+
+	pose_out.header = pose_in.header;
+
+//	pose_out.header.stamp = pose_in.header.stamp;
+//	pose_out.header.frame_id = pose_in.header.frame_id;// + "straightened";
+
+	return pose_out;
+}
+
 void odometry_filtered_callback(const nav_msgs::Odometry::ConstPtr msg)
 {
 	landing_pad_global_pose_filtered = msg->pose.pose;
@@ -87,8 +114,8 @@ void local_position_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
 	geometry_msgs::TransformStamped transform_stamped_message;
 	transform_stamped_message.header.stamp = ros::Time::now();
-	transform_stamped_message.header.frame_id = "global_ned";
-	transform_stamped_message.child_frame_id = "local_ned_absolute_yaw";
+	transform_stamped_message.header.frame_id = "global_edn";
+	transform_stamped_message.child_frame_id = "body_edn_absolute_yaw";
 
 	// we go from END to NED
 	transform_stamped_message.transform.translation.x = msg->pose.position.y;
@@ -112,8 +139,8 @@ void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
 	geometry_msgs::TransformStamped transform_stamped_message;
 	transform_stamped_message.header.stamp = ros::Time::now();
-	transform_stamped_message.header.frame_id = "local_ned_absolute_yaw";
-	transform_stamped_message.child_frame_id = "local_ned";
+	transform_stamped_message.header.frame_id = "body_edn_absolute_yaw";
+	transform_stamped_message.child_frame_id = "body_edn";
 
 	tf2::Quaternion orientation, yaw;
 	tf2::fromMsg(msg->orientation, orientation);
@@ -144,52 +171,6 @@ void camera_imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 	transform_stamped_message.transform.rotation = msg->orientation;
 	transform_broadcaster.sendTransform(transform_stamped_message);
 }
-
-/*
-// original
-void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
-{
-	bool detection = false;
-
-	int num_markers = msg->markers.size();
-	double x, y, z;
-	double rotation_x, rotation_y, rotation_z, rotation_w;
-
-	geometry_msgs::Pose buffer;
-
-	int i = 0;
-	while( i < num_markers && ! detection )
-	{
-		int id = msg->markers[i].id;
-		buffer = msg->markers[i].pose;
-
-		int ii = 0;
-		while( ii < 2 && landing_pad_id[ii] != id )
-		{
-			ii ++;
-		}
-		if( ii < 2 )
-		{
-			detection = true;
-		}
-
-		i ++;
-	}
-
-	if( detection )
-	{
-		landing_pad_camera_pose.header.stamp = ros::Time::now();
-		landing_pad_camera_pose.header.frame_id = "camera_frame";
-		landing_pad_camera_pose.pose = buffer;
-		
-		landing_pad_camera_pose.pose.position.x = buffer.position.z;
-		landing_pad_camera_pose.pose.position.y = buffer.position.x;
-		landing_pad_camera_pose.pose.position.z = -buffer.position.y;
-		
-		last_detection_time = ros::Time::now();
-	}
-}
-*/
 
 void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 {
@@ -231,6 +212,7 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 
 		landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
 
+		/*
 		static tf2_ros::TransformBroadcaster transform_broadcaster;
 		geometry_msgs::TransformStamped transform_stamped_message;
 		transform_stamped_message.header.stamp = ros::Time::now();
@@ -241,6 +223,7 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 		tf2::fromMsg(landing_pad_camera_pose.pose.orientation, rotation);
 		tf2::Quaternion inverse_rotation = rotation.inverse();
 		transform_stamped_message.transform.rotation = tf2::toMsg(inverse_rotation);
+		*/
 
 		/*
 		// we go from END to NED
@@ -253,7 +236,7 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 		transform_stamped_message.transform.rotation.z = landing_pad_camera_pose.pose.orientation.z;
 		*/
 
-		transform_broadcaster.sendTransform(transform_stamped_message);
+		//transform_broadcaster.sendTransform(transform_stamped_message);
 	}
 }
 
@@ -403,36 +386,54 @@ int main(int argc, char** argv)
 			// transform pose in camera frame to pose relative to the drone in NED
 			try
 			{
-				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "local_ned", ros::Duration(0.1));
-
+				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "body_edn", ros::Duration(0.1));
 				landing_pad_base_link_pose_stamped		= transform_buffer.transform(landing_pad_camera_pose, "base_link", ros::Duration(0.1));
 
-
-
-
+/*
 				geometry_msgs::PoseStamped buffer_pose = landing_pad_relative_pose_stamped;
 				tf2::Stamped< tf2::Transform > buffer_transform;
 				tf2::Quaternion buffer_pose_rotation;
 				tf2::fromMsg(buffer_pose.pose.orientation, buffer_pose_rotation);
 				tf2::Quaternion buffer_pose_rotation_inverse = buffer_pose_rotation.inverse();
 				buffer_transform.setRotation(buffer_pose_rotation_inverse);
+*/
+				geometry_msgs::PoseStamped buffer2;
+
+//				geometry_msgs::TransformStamped transform_stamped_buffer = tf2::toMsg(buffer_transform);
+//				tf2::doTransform(buffer_pose, buffer2, transform_stamped_buffer);
+
+				//landing_pad_base_link_pose_stamped = straighten_pose(landing_pad_relative_pose_stamped);
+				//landing_pad_relative_pose_stamped = straighten_pose(landing_pad_relative_pose_stamped);
+				
+				
 
 
-				geometry_msgs::TransformStamped transform_stamped_buffer = tf2::toMsg(buffer_transform);
-				tf2::doTransform(buffer_pose, landing_pad_base_link_pose_stamped, transform_stamped_buffer);
 
 
+				landing_pad_relative_pose_absolute_yaw_stamped	= transform_buffer.transform(landing_pad_camera_pose, "body_edn_absolute_yaw", ros::Duration(0.1));
 
+				static tf2_ros::TransformBroadcaster transform_broadcaster;
+				geometry_msgs::TransformStamped transform_stamped_message;
+				transform_stamped_message.header.stamp = ros::Time::now();
+				transform_stamped_message.header.frame_id = "body_edn_absolute_yaw";
+				transform_stamped_message.child_frame_id = "body_edn_absolute_yaw_straightened";
+				transform_stamped_message.transform.rotation = landing_pad_relative_pose_absolute_yaw_stamped.pose.orientation;
+				transform_broadcaster.sendTransform(transform_stamped_message);
 
+				geometry_msgs::PoseStamped buffer;
+				buffer = transform_buffer.transform(landing_pad_camera_pose, "body_edn_absolute_yaw_straightened", ros::Duration(0.1));
+				landing_pad_base_link_pose_stamped_publisher.publish(buffer);
+//				landing_pad_base_link_pose_stamped_publisher.publish(landing_pad_relative_pose_stamped);
 
+				landing_pad_relative_pose_absolute_yaw_stamped = buffer;
 
-				landing_pad_relative_pose_absolute_yaw_stamped	= transform_buffer.transform(landing_pad_relative_pose_stamped, "local_ned_absolute_yaw", ros::Duration(0.1));
+//				landing_pad_relative_pose_absolute_yaw_stamped	= straighten_pose(landing_pad_relative_pose_absolute_yaw_stamped);
 
-				landing_pad_base_link_pose_stamped_publisher.publish(landing_pad_base_link_pose_stamped);
+//				ROS_INFO_STREAM(landing_pad_relative_pose_absolute_yaw_stamped);
 
-				landing_pad_global_pose_stamped.pose.position.x = landing_pad_relative_pose_absolute_yaw_stamped.pose.position.x + local_position_pose_stamped.pose.position.y;
-				landing_pad_global_pose_stamped.pose.position.y = -landing_pad_relative_pose_absolute_yaw_stamped.pose.position.y - local_position_pose_stamped.pose.position.x;
-				landing_pad_global_pose_stamped.pose.position.z = max(local_position_pose_stamped.pose.position.z - landing_pad_relative_pose_absolute_yaw_stamped.pose.position.z, 0.1);
+				landing_pad_global_pose_stamped.pose.position.x = local_position_pose_stamped.pose.position.y + landing_pad_relative_pose_absolute_yaw_stamped.pose.position.z;
+				landing_pad_global_pose_stamped.pose.position.y = -local_position_pose_stamped.pose.position.x - landing_pad_relative_pose_absolute_yaw_stamped.pose.position.x;
+				landing_pad_global_pose_stamped.pose.position.z = max(local_position_pose_stamped.pose.position.z + landing_pad_relative_pose_absolute_yaw_stamped.pose.position.y, 0.1);
 			}
 			catch( tf2::TransformException &exception )
 			{
