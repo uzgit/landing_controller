@@ -11,7 +11,7 @@
 	<arg name="idBits" default="2" doc="Number of encoded bits"/>
 	<arg name="idSamples" default="360" doc="Number of samples to detect ID"/>
 	<arg name="hammingDist" default="1" doc="Hamming distance used for ID"/>
-	<arg name="maxMarkers" default="4" doc="Maximum possible amount of markers to be tracked"/>
+	<arg name="maxMarkers" default="1" doc="Maximum possible amount of markers to be tracked"/>
 	<arg name="useGui" default="true" doc="Whether to use GUI"/>
 
 	<arg name="fontPath" value="$(find whycon_ros)/etc/font.ttf"/>
