@@ -202,13 +202,11 @@ void approach(geometry_msgs::PoseStamped target_position)
 	buffer.coordinate_frame = 8; // FRAME_BODY_NED
 	buffer.type_mask = 4088; // ignore everything except positional arguments x, y
 
-	buffer.position.x = -target_position.pose.position.x;
-	buffer.position.y = -target_position.pose.position.y;
+	buffer.position.x = -target_position.pose.position.y;
+	buffer.position.y = target_position.pose.position.x;
 	buffer.position.z = 0;
 
-	ROS_INFO_STREAM(buffer);
-
-//	setpoint_raw_local_publisher.publish(buffer);
+	setpoint_raw_local_publisher.publish(buffer);
 }
 
 void hold_plane_position()
@@ -291,7 +289,9 @@ int main(int argc, char** argv)
 
 //				landing_pad_relative_pose_stamped		= straighten_pose(landing_pad_relative_pose_stamped);
 //				landing_pad_base_link_pose_stamped		= transform_buffer.transform(landing_pad_camera_pose, "body_END", 		ros::Duration(0.1));
-				
+
+//				ROS_INFO_STREAM(straighten_pose(transform_buffer.transform(landing_pad_camera_pose, "body_END", ros::Duration(0.1))));
+
 				landing_pad_relative_pose_absolute_yaw_stamped	= transform_buffer.transform(landing_pad_camera_pose, "body_END_absolute_yaw",	ros::Duration(0.1));
 				landing_pad_relative_pose_absolute_yaw_stamped	= straighten_pose(landing_pad_relative_pose_absolute_yaw_stamped);
 //				ROS_INFO_STREAM(landing_pad_relative_pose_absolute_yaw_stamped);
@@ -318,17 +318,26 @@ int main(int argc, char** argv)
 			if( ros::Time::now() - last_target_send_time >= ros::Duration(0.5) )
 			{
 				last_target_send_time = ros::Time::now();
-				double distance = plane_distance_to(landing_pad_relative_pose_stamped);
-				//ROS_INFO_STREAM(landing_pad_relative_pose_stamped);
+//				double distance = plane_distance_to(straighten_pose(landing_pad_relative_pose_stamped));
+				double distance = -1;
+				try
+				{
+					geometry_msgs::PoseStamped buffer = straighten_pose(landing_pad_relative_pose_stamped);
+			        	distance= plane_distance_to(buffer);
+				}
+				catch(...)
+				{
+					ROS_WARN("exception in main loop");
+				}
 				ROS_INFO("%f", distance); 
-				if( distance >= 0.3 )
+				if( distance >= 2.0 )
 				{
 					approach(landing_pad_relative_pose_stamped);
 				}
 				else// if( ! stopped )
 				{
-//					descend_in_place();
-					hold_plane_position();
+					descend_in_place();
+//					hold_plane_position();
 				//	stopped = true;
 //					if( distance < 0.3 )
 //					{
