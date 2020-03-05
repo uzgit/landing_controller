@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<launch>
+
+	<!--node pkg="tf" type="static_transform_publisher" name="static_transform_publisher_example" args="x y z x y z w parent_frame child_frame frequency " /-->
+
+        <arg name="fontPath" value="$(find whycon_ros)/etc/font.ttf"/>
+        <arg name="calibDefPath" value="$(find whycon_ros)/etc/default.cal"/>
+
+	<!-- *********************************************************************** -->
+	<arg name="launch_prefix" default="" /> <!-- set to value="gdbserver localhost:10000" for remote debugging -->
+	<arg name="node_namespace" default="apriltag_ros_continuous_node" />
+	<arg name="camera_name" default="/camera" />
+	<arg name="camera_frame" default="camera_frame" />
+	<arg name="image_topic" default="image_raw" />
+
+	<!-- Set parameters -->
+	<rosparam command="load" file="$(find apriltag_ros)/config/settings.yaml" ns="$(arg node_namespace)" />
+	<rosparam command="load" file="$(find apriltag_ros)/config/tags.yaml" ns="$(arg node_namespace)" />
+
+	<node pkg="apriltag_ros" type="apriltag_ros_continuous_node" name="$(arg node_namespace)" clear_params="true" output="screen" launch-prefix="$(arg launch_prefix)" >
+		<!-- Remap topics from those used in code to those on the ROS network -->
+		<remap from="image_rect" to="$(arg camera_name)/$(arg image_topic)" />
+		<remap from="camera_info" to="$(arg camera_name)/camera_info" />
+
+		<param name="camera_frame" type="str" value="$(arg camera_frame)" />
+		<param name="publish_tag_detections_image" type="bool" value="true" />      <!-- default: false -->
+	</node>
+
+	<!-- *********************************************************************** -->
+
+	<node pkg="gimbal_controller" type="gimbal_controller" name="gimbal_controller_node" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" output="screen">
+	</node>
+	
+	<!-- *********************************************************************** -->
+	
+        <arg name="fcu_url" default="udp://127.0.0.1:14551@14555" />
+        <arg name="gcs_url" default="" />
+        <arg name="tgt_system" default="1" />
+        <arg name="tgt_component" default="1" />
+        <arg name="log_output" default="screen" />
+        <arg name="fcu_protocol" default="v2.0" />
+        <arg name="respawn_mavros" default="false" />
+
+        <include file="$(find mavros)/launch/node.launch">
+                <arg name="pluginlists_yaml" value="$(find mavros)/launch/apm_pluginlists.yaml" />
+                <arg name="config_yaml" value="$(find mavros)/launch/apm_config.yaml" />
+
+                <arg name="fcu_url" value="$(arg fcu_url)" />
+                <arg name="gcs_url" value="$(arg gcs_url)" />
+                <arg name="tgt_system" value="$(arg tgt_system)" />
+                <arg name="tgt_component" value="$(arg tgt_component)" />
+                <arg name="log_output" value="$(arg log_output)" />
+                <arg name="fcu_protocol" value="$(arg fcu_protocol)" />
+                <arg name="respawn_mavros" default="$(arg respawn_mavros)" />
+        </include>
+	
+	<!-- *********************************************************************** -->
+
+		<node pkg="landing_controller" type="landing_controller" name="landing_controller_node" output="screen" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" >
+	</node>
+
+</launch>

@@ -190,6 +190,7 @@ install(TARGETS ${PROJECT_NAME}
 ## Mark other files for installation (e.g. launch and bag files, etc.)
 install(FILES
   launch/sitl.launch
+  launch/sitl_apriltag.launch
   # myfile2
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

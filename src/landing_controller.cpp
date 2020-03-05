@@ -192,7 +192,7 @@ void landing_pad_camera_pose_callback(const geometry_msgs::PoseStamped::ConstPtr
 */
 }
 
-// target_position is in EDN
+// target_position is in NWU
 void approach(geometry_msgs::PoseStamped target_position)
 {
 	mavros_msgs::PositionTarget buffer;
@@ -202,11 +202,13 @@ void approach(geometry_msgs::PoseStamped target_position)
 	buffer.coordinate_frame = 8; // FRAME_BODY_NED
 	buffer.type_mask = 4088; // ignore everything except positional arguments x, y
 
-	buffer.position.x = target_position.pose.position.z;
-	buffer.position.y = target_position.pose.position.x;
+	buffer.position.x = -target_position.pose.position.x;
+	buffer.position.y = -target_position.pose.position.y;
 	buffer.position.z = 0;
 
-	setpoint_raw_local_publisher.publish(buffer);
+	ROS_INFO_STREAM(buffer);
+
+//	setpoint_raw_local_publisher.publish(buffer);
 }
 
 void hold_plane_position()
@@ -281,7 +283,12 @@ int main(int argc, char** argv)
 			// transform pose in camera frame to pose relative to the drone in NED
 			try
 			{
+//				ROS_INFO_STREAM(landing_pad_camera_pose);
+
 				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "body_END",		ros::Duration(0.1));
+
+//				ROS_INFO_STREAM(straighten_pose(landing_pad_relative_pose_stamped));
+
 //				landing_pad_relative_pose_stamped		= straighten_pose(landing_pad_relative_pose_stamped);
 //				landing_pad_base_link_pose_stamped		= transform_buffer.transform(landing_pad_camera_pose, "body_END", 		ros::Duration(0.1));
 				
@@ -290,12 +297,12 @@ int main(int argc, char** argv)
 //				ROS_INFO_STREAM(landing_pad_relative_pose_absolute_yaw_stamped);
 
 				// for visualization
-				landing_pad_global_pose_stamped.pose.position.x = local_position_pose_stamped.pose.position.y + landing_pad_relative_pose_absolute_yaw_stamped.pose.position.y;
-				landing_pad_global_pose_stamped.pose.position.y = local_position_pose_stamped.pose.position.x + landing_pad_relative_pose_absolute_yaw_stamped.pose.position.x;
-				landing_pad_global_pose_stamped.pose.position.z = max(local_position_pose_stamped.pose.position.z - landing_pad_relative_pose_absolute_yaw_stamped.pose.position.z, 0.1);
+				landing_pad_global_pose_stamped.pose.position.x = local_position_pose_stamped.pose.position.y + landing_pad_relative_pose_absolute_yaw_stamped.pose.position.x;
+				landing_pad_global_pose_stamped.pose.position.y = local_position_pose_stamped.pose.position.x - landing_pad_relative_pose_absolute_yaw_stamped.pose.position.y;
+				landing_pad_global_pose_stamped.pose.position.z = max(local_position_pose_stamped.pose.position.z + landing_pad_relative_pose_absolute_yaw_stamped.pose.position.z, 0.1);
 			
 				geometry_msgs::PoseStamped buffer		= transform_buffer.transform(landing_pad_camera_pose, "body_END", 		ros::Duration(0.1));
-				ROS_INFO_STREAM(straighten_pose(buffer));
+				//ROS_INFO_STREAM(straighten_pose(buffer));
 //				ROS_INFO_STREAM(buffer);
 			}
 			catch( tf2::TransformException &exception )
@@ -313,21 +320,21 @@ int main(int argc, char** argv)
 				last_target_send_time = ros::Time::now();
 				double distance = plane_distance_to(landing_pad_relative_pose_stamped);
 				//ROS_INFO_STREAM(landing_pad_relative_pose_stamped);
-//				ROS_INFO("%f", distance); 
-//				if( distance >= 0.3 )
-//				{
-//					approach(landing_pad_relative_pose_stamped);
-//				}
-//				else// if( ! stopped )
-//				{
+				ROS_INFO("%f", distance); 
+				if( distance >= 0.3 )
+				{
+					approach(landing_pad_relative_pose_stamped);
+				}
+				else// if( ! stopped )
+				{
 //					descend_in_place();
-					//hold_plane_position();
+					hold_plane_position();
 				//	stopped = true;
 //					if( distance < 0.3 )
 //					{
 //						descend();
 //					}
-//				}
+				}
 			}
 		}
 
