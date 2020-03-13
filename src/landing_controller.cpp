@@ -43,6 +43,7 @@ std_msgs::Bool std_msgs_true;
 std_msgs::Bool std_msgs_false;
 
 geometry_msgs::PoseStamped landing_pad_camera_pose;
+geometry_msgs::PoseStamped landing_pad_whycon_pose;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped_straightened;
 geometry_msgs::PoseStamped landing_pad_relative_pose_absolute_yaw_stamped;
@@ -207,6 +208,13 @@ float32 yaw
 float32 yaw_rate
 */
 
+void landing_pad_whycon_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
+{
+	landing_pad_whycon_pose = *msg;
+
+	ROS_INFO_STREAM(landing_pad_whycon_pose);
+}
+
 void landing_pad_camera_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
 	landing_pad_camera_pose = *msg;
@@ -301,6 +309,7 @@ int main(int argc, char** argv)
 //	ros::Subscriber imu_subscriber = node_handle.subscribe("/imu", 1000, imu_callback);
 //	ros::Subscriber local_position_pose_subscriber = node_handle.subscribe("/mavros/local_position/pose", 1000, local_position_pose_callback);
 	ros::Subscriber landing_pad_camera_pose_subscriber = node_handle.subscribe("/landing_pad/camera_pose", 1000, landing_pad_camera_pose_callback);
+	ros::Subscriber landing_pad_whycon_pose_subscriber = node_handle.subscribe("/landing_pad/whycon_pose", 1000, landing_pad_whycon_pose_callback);
 	ros::Subscriber control_effort_n_subscriber = node_handle.subscribe("/pid/control_effort/n", 1000, control_effort_n_callback);
 	ros::Subscriber control_effort_e_subscriber = node_handle.subscribe("/pid/control_effort/e", 1000, control_effort_e_callback);
 	ros::Subscriber control_effort_u_subscriber = node_handle.subscribe("/pid/control_effort/u", 1000, control_effort_u_callback);
@@ -374,7 +383,7 @@ int main(int argc, char** argv)
 					ROS_WARN("exception in main loop");
 				}
 				
-				if( distance >= 0.3 )
+				if( distance >= 0.5  )
 				{
 					// do not descend while not in landing range
 					pid_enable_u_publisher.publish( std_msgs_false );
