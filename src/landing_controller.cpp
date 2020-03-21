@@ -44,6 +44,7 @@ std_msgs::Bool std_msgs_false;
 
 geometry_msgs::PoseStamped landing_pad_camera_pose;
 geometry_msgs::PoseStamped landing_pad_whycon_pose;
+geometry_msgs::PoseStamped landing_pad_apriltag_pose;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped_straightened;
 geometry_msgs::PoseStamped landing_pad_relative_pose_absolute_yaw_stamped;
@@ -211,13 +212,38 @@ float32 yaw_rate
 void landing_pad_whycon_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
 	landing_pad_whycon_pose = *msg;
+	geometry_msgs::PoseStamped buffer = landing_pad_whycon_pose;
+	try
+	{
+		straighten_pose(landing_pad_apriltag_pose);
+		buffer = straighten_pose(landing_pad_whycon_pose);
+		landing_pad_whycon_pose = transform_buffer.transform(landing_pad_whycon_pose, "body_enu", ros::Duration(0.1));
+	}
+	catch( ... )
+	{
+		ROS_WARN("caught an exception.");
+	}
+	
+	tf2::Quaternion orientation;
+	tf2::fromMsg(buffer.pose.orientation, orientation);
+//	tf2::fromMsg(msg->pose.orientation, orientation);
 
-	ROS_INFO_STREAM(landing_pad_whycon_pose);
+	double yaw, pitch, roll;
+	tf2::Matrix3x3(orientation).getEulerYPR(yaw, pitch, roll);
+
+//	ROS_INFO("YPR: <%0.2f, %0.2f, %0.2f", yaw, pitch, roll);
+//	ROS_INFO_STREAM(buffer);
+//	ROS_INFO_STREAM(landing_pad_whycon_pose);
 }
 
 void landing_pad_camera_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
 	landing_pad_camera_pose = *msg;
+}
+
+void landing_pad_apriltag_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
+{
+	landing_pad_apriltag_pose = *msg;
 }
 
 /*
@@ -310,6 +336,7 @@ int main(int argc, char** argv)
 //	ros::Subscriber local_position_pose_subscriber = node_handle.subscribe("/mavros/local_position/pose", 1000, local_position_pose_callback);
 	ros::Subscriber landing_pad_camera_pose_subscriber = node_handle.subscribe("/landing_pad/camera_pose", 1000, landing_pad_camera_pose_callback);
 	ros::Subscriber landing_pad_whycon_pose_subscriber = node_handle.subscribe("/landing_pad/whycon_pose", 1000, landing_pad_whycon_pose_callback);
+	ros::Subscriber landing_pad_apriltag_pose_subscriber = node_handle.subscribe("/landing_pad/apriltag_pose", 1000, landing_pad_apriltag_pose_callback);
 	ros::Subscriber control_effort_n_subscriber = node_handle.subscribe("/pid/control_effort/n", 1000, control_effort_n_callback);
 	ros::Subscriber control_effort_e_subscriber = node_handle.subscribe("/pid/control_effort/e", 1000, control_effort_e_callback);
 	ros::Subscriber control_effort_u_subscriber = node_handle.subscribe("/pid/control_effort/u", 1000, control_effort_u_callback);
@@ -350,6 +377,8 @@ int main(int argc, char** argv)
 				// determine how to react to the landing pad detection
 				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "body_enu", ros::Duration(0.1));
 				landing_pad_relative_pose_stamped_straightened	= straighten_pose(landing_pad_relative_pose_stamped);
+
+				ROS_INFO_STREAM(landing_pad_relative_pose_stamped_straightened);
 
 				// publish relative pose
 				landing_pad_relative_pose_stamped_publisher.publish(landing_pad_relative_pose_stamped);
