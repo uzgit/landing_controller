@@ -2,6 +2,7 @@
 
 using namespace std;
 
+/*
 // remove rotation from a pose by rotating it by the inverse of its rotation
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & _pose_in )
 {
@@ -36,6 +37,7 @@ geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & _
 	// transform the pose and return it
 	return transform_buffer.transform(pose_in, transform_stamped_message.header.frame_id, ros::Duration(0.05));
 }
+*/
 
 /*
 void local_position_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
@@ -105,6 +107,11 @@ void control_effort_u_callback(const std_msgs::Float64::ConstPtr &msg)
 	target_velocity.z = msg->data;
 }
 
+void control_effort_yaw_callback(const std_msgs::Float64::ConstPtr &msg)
+{
+	target_yaw_rate = msg->data;
+}
+
 /*
 # Message for SET_POSITION_TARGET_LOCAL_NED
 #
@@ -157,7 +164,7 @@ void landing_pad_whycon_pose_callback(const geometry_msgs::PoseStamped::ConstPtr
 	geometry_msgs::PoseStamped buffer = landing_pad_whycon_pose;
 	try
 	{
-		straighten_pose(landing_pad_whycon_pose);
+//		straighten_pose(landing_pad_whycon_pose);
 //		buffer = straighten_pose(landing_pad_whycon_pose);
 		landing_pad_whycon_pose = transform_buffer.transform(landing_pad_whycon_pose, "body_enu", ros::Duration(0.1));
 	}
@@ -282,6 +289,7 @@ int main(int argc, char** argv)
 	ros::Subscriber control_effort_n_subscriber = node_handle.subscribe("/pid/control_effort/n", 1000, control_effort_n_callback);
 	ros::Subscriber control_effort_e_subscriber = node_handle.subscribe("/pid/control_effort/e", 1000, control_effort_e_callback);
 	ros::Subscriber control_effort_u_subscriber = node_handle.subscribe("/pid/control_effort/u", 1000, control_effort_u_callback);
+	ros::Subscriber control_effort_yaw_subscriber = node_handle.subscribe("/pid/control_effort/yaw", 1000, control_effort_yaw_callback);
 
 	// create publishers
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
@@ -291,12 +299,15 @@ int main(int argc, char** argv)
 	displacement_n_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/body_neu/displacement/n", 1000);
 	displacement_e_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/body_neu/displacement/e", 1000);
 	displacement_u_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/body_neu/displacement/u", 1000);
+	displacement_yaw_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/body_neu/displacement/yaw", 1000);
 	displacement_n_setpoint_publisher = node_handle.advertise<std_msgs::Float64>("/pid/body_neu/setpoint/n", 1000);
 	displacement_e_setpoint_publisher = node_handle.advertise<std_msgs::Float64>("/pid/body_neu/setpoint/e", 1000);
 	displacement_u_setpoint_publisher = node_handle.advertise<std_msgs::Float64>("/pid/body_neu/setpoint/u", 1000);
+	displacement_yaw_setpoint_publisher = node_handle.advertise<std_msgs::Float64>("/pid/body_neu/setpoint/yaw", 1000);
 	pid_enable_n_publisher = node_handle.advertise<std_msgs::Bool>("/pid/pid_enable/n/", 1000);
 	pid_enable_e_publisher = node_handle.advertise<std_msgs::Bool>("/pid/pid_enable/e/", 1000);
 	pid_enable_u_publisher = node_handle.advertise<std_msgs::Bool>("/pid/pid_enable/u/", 1000);
+	pid_enable_yaw_publisher = node_handle.advertise<std_msgs::Bool>("/pid/pid_enable/yaw/", 1000);
 
 	// for transforms
 	static tf2_ros::TransformListener transform_listener(transform_buffer);
@@ -314,10 +325,11 @@ int main(int argc, char** argv)
 			try
 			{
 				// this is done because it generates a necessary transform
-				straighten_pose(landing_pad_apriltag_pose);
+//				straighten_pose(landing_pad_apriltag_pose);
 
 				// determine how to react to the landing pad detection
 				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "body_enu", ros::Duration(0.1));
+//				ROS_INFO_STREAM(landing_pad_relative_pose_stamped);
 //				landing_pad_relative_pose_stamped_straightened	= straighten_pose(landing_pad_relative_pose_stamped);
 
 //				ROS_INFO_STREAM(landing_pad_relative_pose_stamped_straightened);
