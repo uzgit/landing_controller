@@ -237,11 +237,14 @@ void set_velocity_target_neu( geometry_msgs::Vector3 _target_velocity )
 	buffer.header.stamp = ros::Time::now();
 	buffer.header.frame_id = "world";
 	buffer.coordinate_frame = 8; // FRAME_BODY_NED
-	buffer.type_mask = 4039; // ignore everything except velocity arguments x, y
+//	buffer.type_mask = 4039; // ignore everything except velocity arguments x, y
+	buffer.type_mask = 1991; // ignore everything except velocity arguments x, y
 
 	buffer.velocity.x = _target_velocity.x;
 	buffer.velocity.y = _target_velocity.y;
 	buffer.velocity.z = _target_velocity.z;
+
+	buffer.yaw_rate = target_yaw_rate;
 
 	setpoint_raw_local_publisher.publish(buffer);
 }
@@ -353,11 +356,13 @@ int main(int argc, char** argv)
 				displacement_n_publisher.publish( landing_pad_relative_pose_stamped.pose.position.y );
 				displacement_e_publisher.publish( landing_pad_relative_pose_stamped.pose.position.x );
 				displacement_u_publisher.publish( landing_pad_relative_pose_stamped.pose.position.z );
+				// yaw displacement is published by gimbal controller
 
 				// publish PID setpoints (always 0)
 				displacement_n_setpoint_publisher.publish( std_msgs_zero );
 				displacement_e_setpoint_publisher.publish( std_msgs_zero );
 				displacement_u_setpoint_publisher.publish( std_msgs_zero );
+				displacement_yaw_setpoint_publisher.publish( std_msgs_zero );
 			
 				if( distance >= 0.5  )
 				{
@@ -372,7 +377,7 @@ int main(int argc, char** argv)
 
 				}
 				// approach using velocity
-				set_velocity_target_neu( target_velocity );
+//				set_velocity_target_neu( target_velocity );
 			}
 		}
 
