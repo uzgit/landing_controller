@@ -105,9 +105,9 @@
 	</node>
 	<node name="velocity_yaw" pkg="pid" type="controller" ns="pid" output="screen" >
 		<param name="node_name" value="velocity_yaw" />
-		<param name="Kp" value="0.11" />
-		<param name="Ki" value="0.0" />
-		<param name="Kd" value="0.01" />
+		<param name="Kp" value="-1.5" />
+		<param name="Ki" value="-0.0" />
+		<param name="Kd" value="-0.1" />
 		<param name="upper_limit" value="1" />
 		<param name="lower_limit" value="-1" />
 		<param name="windup_limit" value="1" />
@@ -117,6 +117,7 @@
 		<remap from="setpoint" to="/pid/body_neu/setpoint/yaw_rate" />
 		<remap from="control_effort" to="control_effort/yaw_rate" />
 		<remap from="pid_enable" to="pid_enable/yaw_rate" />
+		<!--param name="reverse_acting" value="true" /-->
 	</node>
 	<!-- *********************************************************************** -->
 
