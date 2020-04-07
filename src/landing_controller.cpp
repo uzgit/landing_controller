@@ -108,8 +108,11 @@ void control_effort_u_callback(const std_msgs::Float64::ConstPtr &msg)
 void control_effort_yaw_callback(const std_msgs::Float64::ConstPtr &msg)
 {
 	target_yaw_rate = msg->data;
+}
 
-//	ROS_INFO_STREAM(msg->data);
+void yaw_displacement_callback(const std_msgs::Float64::ConstPtr &msg)
+{
+	yaw_displacement = msg->data;
 }
 
 /*
@@ -312,6 +315,7 @@ int main(int argc, char** argv)
 	ros::Subscriber control_effort_e_subscriber = node_handle.subscribe("/pid/control_effort/e", 1000, control_effort_e_callback);
 	ros::Subscriber control_effort_u_subscriber = node_handle.subscribe("/pid/control_effort/u", 1000, control_effort_u_callback);
 	ros::Subscriber control_effort_yaw_subscriber = node_handle.subscribe("/pid/control_effort/yaw_rate", 1000, control_effort_yaw_callback);
+	ros::Subscriber yaw_displacement_subscriber = node_handle.subscribe("/landing_pad/yaw_displacement", 1000, yaw_displacement_callback);
 
 	// create publishers
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
@@ -394,6 +398,16 @@ int main(int argc, char** argv)
 					// descend if within landing range
 					pid_enable_u_publisher.publish( std_msgs_true );
 
+				}
+				
+				if( abs(yaw_displacement) > 0.0872665 )
+				{
+					pid_enable_yaw_publisher.publish( std_msgs_true );
+				}
+				else
+				{
+					pid_enable_yaw_publisher.publish( std_msgs_false );
+					target_yaw_rate = 0;
 				}
 				// approach using velocity
 //				set_velocity_target_neu( target_velocity );

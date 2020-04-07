@@ -55,7 +55,8 @@ geometry_msgs::PoseStamped landing_pad_relative_pose_absolute_yaw_stamped;
 geometry_msgs::PoseStamped landing_pad_global_pose_stamped;
 geometry_msgs::PoseStamped local_position_pose_stamped;
 geometry_msgs::Vector3 target_velocity;
-int target_yaw_rate = 0;
+double target_yaw_rate = 0;
+double yaw_displacement = 0;
 
 tf2_ros::Buffer transform_buffer;
 

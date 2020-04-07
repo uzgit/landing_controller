@@ -60,9 +60,9 @@
 	
 	<node name="velocity_north" pkg="pid" type="controller" ns="pid" output="screen" >
 		<param name="node_name" value="velocity_north" />
-		<param name="Kp" value="-0.25" />
-		<param name="Ki" value="-0.1" />
-		<param name="Kd" value="-0.1" />
+		<param name="Kp" value="-0.6" />
+		<param name="Ki" value="-0.0" />
+		<param name="Kd" value="-0.5" />
 		<param name="upper_limit" value="2" />
 		<param name="lower_limit" value="-2" />
 		<param name="windup_limit" value="10" />
@@ -75,9 +75,9 @@
 	</node>
 	<node name="velocity_east" pkg="pid" type="controller" ns="pid" output="screen" >
 		<param name="node_name" value="velocity_east" />
-		<param name="Kp" value="-0.25" />
-		<param name="Ki" value="-0.1" />
-		<param name="Kd" value="-0.1" />
+		<param name="Kp" value="-0.6" />
+		<param name="Ki" value="-0.0" />
+		<param name="Kd" value="-0.5" />
 		<param name="upper_limit" value="2" />
 		<param name="lower_limit" value="-2" />
 		<param name="windup_limit" value="10" />
@@ -105,9 +105,9 @@
 	</node>
 	<node name="velocity_yaw" pkg="pid" type="controller" ns="pid" output="screen" >
 		<param name="node_name" value="velocity_yaw" />
-		<param name="Kp" value="-1.5" />
-		<param name="Ki" value="-0.0" />
-		<param name="Kd" value="-0.1" />
+		<param name="Kp" value="1.5" />
+		<param name="Ki" value="0.0" />
+		<param name="Kd" value="0.1" />
 		<param name="upper_limit" value="1" />
 		<param name="lower_limit" value="-1" />
 		<param name="windup_limit" value="1" />
