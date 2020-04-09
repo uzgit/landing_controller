@@ -38,6 +38,8 @@ ros::Publisher pid_enable_n_publisher;
 ros::Publisher pid_enable_e_publisher;
 ros::Publisher pid_enable_u_publisher;
 ros::Publisher pid_enable_yaw_publisher;
+ros::Publisher pid_reconfigure_e_publisher;
+ros::Publisher pid_reconfigure_n_publisher;
 
 std_msgs::Float64 std_msgs_zero;
 std_msgs::Float64 setpoint_n;
@@ -79,5 +81,15 @@ void landing_pad_camera_pose_callback(   const geometry_msgs::PoseStamped::Const
 void landing_pad_apriltag_pose_callback( const geometry_msgs::PoseStamped::ConstPtr );
 void set_velocity_target_neu( geometry_msgs::Vector3 );
 double plane_distance_to( geometry_msgs::PoseStamped );
+
+enum LANDING_PHASES
+{
+	NOT_LANDING = 0,
+	APPROACH,
+	CLOSE_APPROACH,
+	DESCENT
+};
+
+int LANDING_PHASE = 0;
 
 #endif

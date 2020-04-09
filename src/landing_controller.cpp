@@ -301,6 +301,8 @@ int main(int argc, char** argv)
 	std_msgs_false.data = false;
 	std_msgs_zero.data  = 0;
 
+	geometry_msgs::Vector3 pid_parameters;
+
 	// create node handle
 	ros::NodeHandle node_handle;
 	
@@ -334,6 +336,8 @@ int main(int argc, char** argv)
 	pid_enable_e_publisher = node_handle.advertise<std_msgs::Bool>("/pid/pid_enable/e/", 1000);
 	pid_enable_u_publisher = node_handle.advertise<std_msgs::Bool>("/pid/pid_enable/u/", 1000);
 	pid_enable_yaw_publisher = node_handle.advertise<std_msgs::Bool>("/pid/pid_enable/yaw_rate/", 1000);
+	pid_reconfigure_e_publisher = node_handle.advertise<geometry_msgs::Vector3>("/pid/reconfigure_topic/e", 1000);
+	pid_reconfigure_n_publisher = node_handle.advertise<geometry_msgs::Vector3>("/pid/reconfigure_topic/n", 1000);
 
 	// for transforms
 	static tf2_ros::TransformListener transform_listener(transform_buffer);
@@ -375,6 +379,21 @@ int main(int argc, char** argv)
 				last_target_send_time = ros::Time::now();
 			        
 				double distance = plane_distance_to(landing_pad_relative_pose_stamped_straightened);
+
+				if( distance < 2.5 && LANDING_PHASE != CLOSE_APPROACH )
+				{
+					pid_parameters.x = -0.3;
+					pid_parameters.y = -0.0;
+					pid_parameters.z = -0.7;
+
+					pid_reconfigure_e_publisher.publish( pid_parameters );
+					pid_reconfigure_n_publisher.publish( pid_parameters );
+
+					ROS_INFO("CLOSE APPROACH");
+
+					LANDING_PHASE = CLOSE_APPROACH;
+				}
+
 				// publish PID states
 				displacement_n_publisher.publish( landing_pad_relative_pose_stamped.pose.position.y );
 				displacement_e_publisher.publish( landing_pad_relative_pose_stamped.pose.position.x );

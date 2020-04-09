@@ -62,7 +62,8 @@
 		<param name="node_name" value="velocity_north" />
 		<param name="Kp" value="-0.6" />
 		<param name="Ki" value="-0.0" />
-		<param name="Kd" value="-0.5" />
+		<!--param name="Kd" value="-0.5" /-->
+		<param name="Kd" value="0" />
 		<param name="upper_limit" value="2" />
 		<param name="lower_limit" value="-2" />
 		<param name="windup_limit" value="10" />
@@ -72,12 +73,15 @@
 		<remap from="setpoint" to="/pid/body_neu/setpoint/n" />
 		<remap from="control_effort" to="control_effort/n" />
 		<remap from="pid_enable" to="pid_enable/n" />
+		<!--remap from="reconfigure_topic" to="reconfigure_topic/n" /-->
+		<param name="reconfigure_topic" value="reconfigure_topic/n" />
 	</node>
 	<node name="velocity_east" pkg="pid" type="controller" ns="pid" output="screen" >
 		<param name="node_name" value="velocity_east" />
 		<param name="Kp" value="-0.6" />
 		<param name="Ki" value="-0.0" />
-		<param name="Kd" value="-0.5" />
+		<!--param name="Kd" value="-0.5" /-->
+		<param name="Kd" value="0" />
 		<param name="upper_limit" value="2" />
 		<param name="lower_limit" value="-2" />
 		<param name="windup_limit" value="10" />
@@ -87,6 +91,8 @@
 		<remap from="setpoint" to="/pid/body_neu/setpoint/e" />
 		<remap from="control_effort" to="control_effort/e" />
 		<remap from="pid_enable" to="pid_enable/e" />
+		<!--remap from="reconfigure_topic" to="reconfigure_topic/e" /-->
+		<param name="reconfigure_topic" value="reconfigure_topic/e" />
 	</node>
 	<node name="velocity_up" pkg="pid" type="controller" ns="pid" output="screen" >
 		<param name="node_name" value="velocity_up" />
@@ -102,6 +108,8 @@
 		<remap from="setpoint" to="/pid/body_neu/setpoint/u" />
 		<remap from="control_effort" to="control_effort/u" />
 		<remap from="pid_enable" to="pid_enable/u" />
+		<!--remap from="reconfigure_topic" to="reconfigure_topic/u" /-->
+		<param name="reconfigure_topic" value="reconfigure_topic/u" />
 	</node>
 	<node name="velocity_yaw" pkg="pid" type="controller" ns="pid" output="screen" >
 		<param name="node_name" value="velocity_yaw" />
@@ -118,6 +126,8 @@
 		<remap from="control_effort" to="control_effort/yaw_rate" />
 		<remap from="pid_enable" to="pid_enable/yaw_rate" />
 		<!--param name="reverse_acting" value="true" /-->
+		<!--remap from="reconfigure_topic" to="reconfigure_topic/yaw" /-->
+		<param name="reconfigure_topic" value="reconfigure_topic/yaw" />
 	</node>
 	<!-- *********************************************************************** -->
 
