@@ -342,32 +342,27 @@ int main(int argc, char** argv)
 	// for transforms
 	static tf2_ros::TransformListener transform_listener(transform_buffer);
 
-	LANDING_PHASE = NOT_LANDING;
-	pid_enable_u_publisher.publish( std_msgs_false );
-
 	ros::Rate loop_rate(40);
-
-	// main loop
 	while( ros::ok() )
 	{
 		// callbacks
 		ros::spinOnce();
-/*	
-		ROS_INFO("result 1: %d", std::nan("1") > 0);
-		ROS_INFO("result 2: %d", std::nan("1") > 1);
-		ROS_INFO("result 2: %d", std::nan("1") == 1);
-*/
-		ROS_INFO_STREAM(LANDING_PHASE);
 	
+		//if( ros::Time::now() - last_detection_time < abort_time )
 		if( ros::Time::now() - landing_pad_camera_pose.header.stamp < abort_time )
 		{
 			// transform pose in camera frame to pose relative to the drone in NED
 			try
 			{
+				// this is done because it generates a necessary transform
+//				straighten_pose(landing_pad_apriltag_pose);
+
 				// determine how to react to the landing pad detection
 				landing_pad_relative_pose_stamped 		= transform_buffer.transform(landing_pad_camera_pose, "body_enu", ros::Duration(0.1));
 //				ROS_INFO_STREAM(landing_pad_relative_pose_stamped);
 				landing_pad_relative_pose_stamped_straightened	= straighten_pose(landing_pad_relative_pose_stamped);
+
+//				ROS_INFO_STREAM(landing_pad_relative_pose_stamped_straightened);
 
 				// publish relative pose
 				landing_pad_relative_pose_stamped_publisher.publish(landing_pad_relative_pose_stamped);
@@ -379,76 +374,64 @@ int main(int argc, char** argv)
 			}
 
 			// Direct the drone towards the landing pad
-			last_target_send_time = ros::Time::now();
+			if( ros::Time::now() - last_target_send_time >= ros::Duration(0.1) )
+			{
+				last_target_send_time = ros::Time::now();
+			        
+				double distance = plane_distance_to(landing_pad_relative_pose_stamped_straightened);
+
+				if( distance < 2.5 && LANDING_PHASE != CLOSE_APPROACH )
+				{
+					pid_parameters.x = -0.3;
+					pid_parameters.y = -0.0;
+					pid_parameters.z = -0.7;
+
+					pid_reconfigure_e_publisher.publish( pid_parameters );
+					pid_reconfigure_n_publisher.publish( pid_parameters );
+
+					ROS_INFO("CLOSE APPROACH");
+
+					LANDING_PHASE = CLOSE_APPROACH;
+				}
+
+				// publish PID states
+				displacement_n_publisher.publish( landing_pad_relative_pose_stamped.pose.position.y );
+				displacement_e_publisher.publish( landing_pad_relative_pose_stamped.pose.position.x );
+				displacement_u_publisher.publish( landing_pad_relative_pose_stamped.pose.position.z );
+				// yaw displacement is published by gimbal controller
+
+				// publish PID setpoints (always 0)
+				displacement_n_setpoint_publisher.publish( std_msgs_zero );
+				displacement_e_setpoint_publisher.publish( std_msgs_zero );
+				displacement_u_setpoint_publisher.publish( std_msgs_zero );
+				displacement_yaw_setpoint_publisher.publish( std_msgs_zero );
 			
-			plane_distance_to_landing_pad = plane_distance_to( landing_pad_relative_pose_stamped_straightened );
+				if( distance >= 1.0  )
+				{
+					// do not descend while not in landing range
+					pid_enable_u_publisher.publish( std_msgs_false );
+					target_velocity.z = 0;
+				}
+				else
+				{
+					// descend if within landing range
+					pid_enable_u_publisher.publish( std_msgs_true );
 
-			// control policy
-			if( plane_distance_to_landing_pad < 1.0 && abs(yaw_displacement) < 0.0872665 && LANDING_PHASE != DESCENT )
-			{
-				pid_enable_u_publisher.publish( std_msgs_true );
-				pid_enable_yaw_publisher.publish( std_msgs_false );
-				target_yaw_rate = 0;
+				}
 				
-				LANDING_PHASE = DESCENT;
-				ROS_WARN("LANDING_PHASE: DESCENT");
-			}
-			else if( plane_distance_to_landing_pad < 1.0 && LANDING_PHASE != YAW_ALIGNMENT )
-			{
-				pid_enable_u_publisher.publish( std_msgs_false );
-				target_velocity.z = 0;
-				pid_enable_yaw_publisher.publish( std_msgs_true );
-
-				LANDING_PHASE = YAW_ALIGNMENT;
-				ROS_WARN("LANDING_PHASE: YAW_ALIGNMENT");
-			}
-			else if( plane_distance_to_landing_pad < 3.0 && LANDING_PHASE != CLOSE_APPROACH )
-			{
-				pid_enable_u_publisher.publish( std_msgs_false );
-				target_velocity.z = 0;
-				pid_enable_yaw_publisher.publish( std_msgs_false );
-
-				pid_parameters.x = -0.3;
-				pid_parameters.y = -0.0;
-				pid_parameters.z = -0.7;
-
-				pid_reconfigure_e_publisher.publish( pid_parameters );
-				pid_reconfigure_n_publisher.publish( pid_parameters );
-
-				LANDING_PHASE = CLOSE_APPROACH;
-				ROS_WARN("LANDING_PHASE: CLOSE_APPROACH");
-			}
-			else if( LANDING_PHASE != APPROACH )
-			{
-				pid_enable_u_publisher.publish( std_msgs_false );
-				target_velocity.z = 0;
-				pid_enable_yaw_publisher.publish( std_msgs_false );
-
-				LANDING_PHASE = APPROACH;
-				ROS_WARN("LANDING_PHASE: APPROACH");
-			}
-
-			ROS_INFO_STREAM(plane_distance_to_landing_pad);
-
-			// publish PID states
-			displacement_n_publisher.publish( landing_pad_relative_pose_stamped.pose.position.y );
-			displacement_e_publisher.publish( landing_pad_relative_pose_stamped.pose.position.x );
-			displacement_u_publisher.publish( landing_pad_relative_pose_stamped.pose.position.z );
-			// yaw displacement is published by gimbal controller
-
-			// publish PID setpoints (always 0)
-			displacement_n_setpoint_publisher.publish( std_msgs_zero );
-			displacement_e_setpoint_publisher.publish( std_msgs_zero );
-			displacement_u_setpoint_publisher.publish( std_msgs_zero );
-			displacement_yaw_setpoint_publisher.publish( std_msgs_zero );
-		
-			// approach using velocity
+				if( abs(yaw_displacement) > 0.0872665 )
+				{
+					pid_enable_yaw_publisher.publish( std_msgs_true );
+				}
+				else
+				{
+					pid_enable_yaw_publisher.publish( std_msgs_false );
+					target_yaw_rate = 0;
+				}
+				// approach using velocity
 //				set_velocity_target_neu( target_velocity );
-			set_velocity_target_neu( target_velocity, target_yaw_rate );
-		}
-		else
-		{
-			LANDING_PHASE = NOT_LANDING;
+				set_velocity_target_neu( target_velocity, target_yaw_rate );
+			}
 		}
 
 		loop_rate.sleep();

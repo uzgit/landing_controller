@@ -58,7 +58,7 @@ geometry_msgs::PoseStamped landing_pad_global_pose_stamped;
 geometry_msgs::PoseStamped local_position_pose_stamped;
 geometry_msgs::Vector3 target_velocity;
 double target_yaw_rate = 0;
-double yaw_displacement = 0;
+double yaw_displacement = std::nan("1");
 
 tf2_ros::Buffer transform_buffer;
 
@@ -84,12 +84,15 @@ double plane_distance_to( geometry_msgs::PoseStamped );
 
 enum LANDING_PHASES
 {
-	NOT_LANDING = 0,
-	APPROACH,
-	CLOSE_APPROACH,
-	DESCENT
+	NOT_LANDING	= 5,
+	APPROACH	= 4,
+	CLOSE_APPROACH	= 3,
+	YAW_ALIGNMENT	= 2,
+	DESCENT		= 1,
+	LANDED		= 0
 };
 
-int LANDING_PHASE = 0;
+int LANDING_PHASE = NOT_LANDING;
+double plane_distance_to_landing_pad = std::nan("1");;
 
 #endif
