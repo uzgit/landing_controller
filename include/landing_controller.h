@@ -9,6 +9,7 @@
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/Vector3.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -40,6 +41,9 @@ ros::Publisher pid_enable_u_publisher;
 ros::Publisher pid_enable_yaw_publisher;
 ros::Publisher pid_reconfigure_e_publisher;
 ros::Publisher pid_reconfigure_n_publisher;
+ros::Publisher vo_whycon_publisher;
+ros::Publisher vo_apriltag_publisher;
+ros::Publisher landing_pad_pose_filtered_publisher;
 
 std_msgs::Float64 std_msgs_zero;
 std_msgs::Float64 setpoint_n;
@@ -52,6 +56,7 @@ geometry_msgs::PoseStamped landing_pad_camera_pose;
 geometry_msgs::PoseStamped landing_pad_whycon_pose;
 geometry_msgs::PoseStamped landing_pad_apriltag_pose;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped;
+geometry_msgs::PoseStamped landing_pad_relative_pose_filtered;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped_straightened;
 geometry_msgs::PoseStamped landing_pad_relative_pose_absolute_yaw_stamped;
 geometry_msgs::PoseStamped landing_pad_global_pose_stamped;
@@ -59,6 +64,8 @@ geometry_msgs::PoseStamped local_position_pose_stamped;
 geometry_msgs::Vector3 target_velocity;
 double target_yaw_rate = 0;
 double yaw_displacement = std::nan("1");
+nav_msgs::Odometry apriltag_odometry_message;
+nav_msgs::Odometry whycon_odometry_message;
 
 tf2_ros::Buffer transform_buffer;
 

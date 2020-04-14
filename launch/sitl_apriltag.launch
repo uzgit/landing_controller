@@ -51,6 +51,28 @@
         </node>
 	
 	<!-- *********************************************************************** -->
+	
+	<!--node pkg="robot_pose_ekf" type="robot_pose_ekf" name="robot_pose_ekf"-->
+	<!--node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization_node">
+		<param name="output_frame" value="body_enu"/>
+		<param name="freq" value="30.0"/>
+		<param name="sensor_timeout" value="1.0"/>
+		<param name="odom_used" value="true"/>
+		<param name="odom_frame" value="body_enu"/>
+		<param name="imu_used" value="true"/>
+		<param name="imu0" value="/imu"/>
+		<param name="vo_used" value="true"/>
+		<param name="debug" value="true"/>
+		<param name="self_diagnose" value="false"/>
+		<param name="odom0" value="/ekf_input/odom_whycon_enu"/>
+		<param name="odom1" value="/ekf_input/odom_apriltag_enu"/>
+		<param name="odom0_differential" value="false" />
+		<rosparam param="odom0_config">[true, true, true, false, false, false, false, false, false, false, false, false, false, false, false]</rosparam>
+		<param name="odom1_differential" value="true" />
+		<rosparam param="odom1_config">[true, true, true, false, false, false, false, false, false, false, false, false, false, false, false]</rosparam>
+	</node-->
+	
+	<!-- *********************************************************************** -->
 
 	<node pkg="image_view" type="image_view" name="apriltag_view" args="/tag_detections_image">
                 <remap from="image" to="/tag_detections_image" />
@@ -96,9 +118,9 @@
 	</node>
 	<node name="velocity_up" pkg="pid" type="controller" ns="pid" output="screen" >
 		<param name="node_name" value="velocity_up" />
-		<param name="Kp" value="-0.1" />
+		<param name="Kp" value="-0.5" />
 		<param name="Ki" value="-0.0" />
-		<param name="Kd" value="-0.01" />
+		<param name="Kd" value="-0.0" />
 		<param name="upper_limit" value="1" />
 		<param name="lower_limit" value="-1" />
 		<param name="windup_limit" value="1" />
