@@ -37,6 +37,37 @@ geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & _
 	return transform_buffer.transform(pose_in, transform_stamped_message.header.frame_id, ros::Duration(0.05));
 }
 
+void model_states_callback(const gazebo_msgs::ModelStates::ConstPtr& msg)
+{
+	int i = 0;
+	while( i < msg->name.size() && msg->name[i] != "iris_demo")
+	{
+		i ++;
+	}
+
+	iris_pose  = msg->pose[i];
+	iris_twist = msg->twist[i];
+
+	// switch pose to ENU
+	double temp_x = iris_pose.position.x;
+	double temp_y = iris_pose.position.y;
+	iris_pose.position.x = -temp_y;
+	iris_pose.position.y =  temp_x;
+
+	// switch linear velocity to ENU
+	temp_x = iris_twist.linear.x;
+	temp_y = iris_twist.linear.y;
+	iris_twist.linear.x = -temp_y;
+	iris_twist.linear.y =  temp_x;
+
+	// switch angular velocity to ENU
+	temp_x = iris_twist.angular.x;
+	temp_y = iris_twist.angular.y;
+	iris_twist.angular.x = -temp_y;
+	iris_twist.angular.y =  temp_x;
+}
+
+
 /*
 void local_position_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
@@ -362,6 +393,7 @@ int main(int argc, char** argv)
 	ros::Subscriber control_effort_yaw_subscriber = node_handle.subscribe("/pid/control_effort/yaw_rate", 1000, control_effort_yaw_callback);
 	ros::Subscriber yaw_displacement_subscriber = node_handle.subscribe("/landing_pad/yaw_displacement", 1000, yaw_displacement_callback);
 	ros::Subscriber odom_combined_subscriber = node_handle.subscribe("/robot_pose_ekf/odom_combined", 1000, odom_combined_callback);
+	ros::Subscriber model_states_subscriber = node_handle.subscribe("/gazebo/model_states", 1000, model_states_callback);
 
 	// create publishers
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
@@ -386,6 +418,19 @@ int main(int argc, char** argv)
 	vo_apriltag_publisher = node_handle.advertise<nav_msgs::Odometry>("/ekf_input/odom_april_enu", 1000);
 	landing_pad_pose_filtered_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/relative_pose_filtered", 1000);
 
+#if LOG
+	// file output for analysis
+	std::ostringstream oss;
+	auto t = std::time(nullptr);
+	auto tm = *std::localtime(&t);
+	oss << "/home/joshua/Documents/flight_data/flight_data_" << std::put_time(&tm, "%d_%m_%Y_%H_%M_%S") << ".csv";
+	std::ofstream outfile;
+	outfile.open(oss.str(), std::ios_base::app);
+
+	// csv header
+	outfile << "iris_position_x,iris_position_y,iris_position_z,iris_linear_velocity_x,iris_linear_velocity_y,iris_linear_velocity_z,iris_angular_velocity_x,iris_angular_velocity_y,iris_angular_velocity_z,whycon_position_x,whycon_position_y,whycon_position_z,apriltag_position_x,apriltag_position_y,apriltag_position_z,landing_pad_detected" << std::endl;
+#endif
+
 	// for transforms
 	static tf2_ros::TransformListener transform_listener(transform_buffer);
 
@@ -399,6 +444,10 @@ int main(int argc, char** argv)
 	{
 		// callbacks
 		ros::spinOnce();
+
+#if LOG
+		landing_pad_detected = false;
+#endif
 
 		if( ros::Time::now() - landing_pad_camera_pose.header.stamp < abort_time )
 		{
@@ -415,6 +464,10 @@ int main(int argc, char** argv)
 				// publish relative pose
 				landing_pad_relative_pose_stamped_publisher.publish(landing_pad_relative_pose_stamped);
 				landing_pad_global_pose_stamped_publisher.publish(landing_pad_global_pose_stamped);
+
+#if LOG
+				landing_pad_detected = true;
+#endif
 			}
 			catch( tf2::TransformException &exception )
 			{
@@ -510,6 +563,49 @@ int main(int argc, char** argv)
 		{
 			LANDING_PHASE = NOT_LANDING;
 		}
+
+#if LOG		
+
+		geometry_msgs::PoseStamped empty_buffer;
+		whycon_pose_temp   = empty_buffer;
+		apriltag_pose_temp = empty_buffer;
+		try
+		{
+			whycon_pose_temp = transform_buffer.transform(landing_pad_whycon_pose, "body_enu", ros::Duration(0.1));
+		}
+		catch(...)
+		{
+			geometry_msgs::PoseStamped empty_buffer;
+			whycon_pose_temp = empty_buffer;
+		}
+		try
+		{
+			apriltag_pose_temp = transform_buffer.transform(landing_pad_apriltag_pose, "body_enu", ros::Duration(0.1));
+		}
+		catch(...)
+		{
+			geometry_msgs::PoseStamped empty_buffer;
+			apriltag_pose_temp = empty_buffer;
+		}
+		
+		outfile << iris_pose.position.x;
+		outfile << "," << iris_pose.position.y;
+		outfile << "," << iris_pose.position.z;
+		outfile << "," << iris_twist.linear.x;
+		outfile << "," << iris_twist.linear.y;
+		outfile << "," << iris_twist.linear.z;
+		outfile << "," << iris_twist.angular.x;
+		outfile << "," << iris_twist.angular.y;
+		outfile << "," << iris_twist.angular.z;
+		outfile << "," << whycon_pose_temp.pose.position.x;
+		outfile << "," << whycon_pose_temp.pose.position.y;
+		outfile << "," << whycon_pose_temp.pose.position.z;
+		outfile << "," << apriltag_pose_temp.pose.position.x;
+		outfile << "," << apriltag_pose_temp.pose.position.y;
+		outfile << "," << apriltag_pose_temp.pose.position.z;
+		outfile << "," << landing_pad_detected;
+		outfile << std::endl;
+#endif
 
 		loop_rate.sleep();
 	}

@@ -1,11 +1,23 @@
 #ifndef LANDING_CONTROLLER_H
 #define LANDING_CONTROLLER_H
 
+#define LOG 1
+
+#if LOG
+#include <stdio.h>
+#include <iomanip>
+#include <stdlib.h>
+#include <fstream>
+#include <ctime>
+#include <sstream>
+#endif
+
 #include <ros/ros.h>
 #include <mavros_msgs/PositionTarget.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Float64.h>
+#include <gazebo_msgs/ModelStates.h>
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -101,5 +113,15 @@ enum LANDING_PHASES
 
 int LANDING_PHASE = NOT_LANDING;
 double plane_distance_to_landing_pad = std::nan("1");;
+
+#if LOG
+// for analysis
+bool landing_pad_detected = false;
+geometry_msgs::Pose iris_pose;
+geometry_msgs::Twist iris_twist;
+geometry_msgs::PoseStamped whycon_pose_temp;
+geometry_msgs::PoseStamped apriltag_pose_temp;
+sensor_msgs::Imu imu_message;
+#endif
 
 #endif
