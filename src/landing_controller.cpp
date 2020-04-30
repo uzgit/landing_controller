@@ -37,6 +37,19 @@ geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & _
 	return transform_buffer.transform(pose_in, transform_stamped_message.header.frame_id, ros::Duration(0.05));
 }
 
+// ( ͡° ͜ʖ ͡°)
+
+void link_states_callback(const gazebo_msgs::LinkStates::ConstPtr& msg)
+{
+	int i = 0;
+	while( i < msg->name.size() && msg->name[i] != "iris_demo::iris_demo::gimbal_small_2d::tilt_link")
+	{
+		i ++;
+	}
+
+	camera_twist = msg->twist[i];
+}
+
 void model_states_callback(const gazebo_msgs::ModelStates::ConstPtr& msg)
 {
 	int i = 0;
@@ -48,12 +61,18 @@ void model_states_callback(const gazebo_msgs::ModelStates::ConstPtr& msg)
 	iris_pose  = msg->pose[i];
 	iris_twist = msg->twist[i];
 
+	tf2::Quaternion rotation;
+	tf2::fromMsg(msg->pose[i].orientation, rotation);
+	tf2::Matrix3x3(rotation).getEulerYPR(iris_yaw, iris_pitch, iris_roll);
+
+#if LOG
 	// switch pose to ENU
 	double temp_x = iris_pose.position.x;
 	double temp_y = iris_pose.position.y;
 	iris_pose.position.x = -temp_y;
 	iris_pose.position.y =  temp_x;
 
+/*
 	// switch linear velocity to ENU
 	temp_x = iris_twist.linear.x;
 	temp_y = iris_twist.linear.y;
@@ -65,6 +84,8 @@ void model_states_callback(const gazebo_msgs::ModelStates::ConstPtr& msg)
 	temp_y = iris_twist.angular.y;
 	iris_twist.angular.x = -temp_y;
 	iris_twist.angular.y =  temp_x;
+*/
+#endif
 }
 
 
@@ -92,23 +113,32 @@ void local_position_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg
 	transform_broadcaster.sendTransform(transform_stamped_message);
 }
 
+*/
+
 void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 {
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
 	geometry_msgs::TransformStamped transform_stamped_message;
 	transform_stamped_message.header.stamp = ros::Time::now();
-	transform_stamped_message.header.frame_id = "body_NEU_absolute_yaw";
-	transform_stamped_message.child_frame_id = "body_NEU";
+	transform_stamped_message.header.frame_id = "body_enu";
+	transform_stamped_message.child_frame_id = "global_enu";
 	
 	tf2::Quaternion orientation, yaw;
 	tf2::fromMsg(msg->orientation, orientation);
-	orientation *= tf2::Quaternion(0, 0, 1, 0);
+//	orientation *= tf2::Quaternion(0, 0, 1, 0);
+	orientation = orientation.inverse();
 	geometry_msgs::Quaternion orientation_message = tf2::toMsg(orientation);
-	
+
+/*	
+	transform_stamped_message.transform.translation.x = -iris_pose.position.x;
+	transform_stamped_message.transform.translation.y = -iris_pose.position.y;
+	transform_stamped_message.transform.translation.z = -iris_pose.position.z;
+*/	
 	transform_stamped_message.transform.rotation = orientation_message;
 	transform_broadcaster.sendTransform(transform_stamped_message);
 }
 
+/*
 void camera_imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 {
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
@@ -199,6 +229,7 @@ void landing_pad_camera_pose_callback(const geometry_msgs::PoseStamped::ConstPtr
 
 void landing_pad_whycon_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
+	whycon_detected = true;
 	landing_pad_whycon_pose = *msg;
 
 	try
@@ -238,6 +269,7 @@ void landing_pad_whycon_pose_callback(const geometry_msgs::PoseStamped::ConstPtr
 
 void landing_pad_apriltag_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
+	apriltag_detected = true;
 	landing_pad_apriltag_pose = *msg;
 	
 	try
@@ -382,7 +414,7 @@ int main(int argc, char** argv)
 	
 	// create subscribers
 //	ros::Subscriber camera_imu_subscriber = node_handle.subscribe("/camera/imu", 1000, camera_imu_callback);
-//	ros::Subscriber imu_subscriber = node_handle.subscribe("/imu", 1000, imu_callback);
+	ros::Subscriber imu_subscriber = node_handle.subscribe("/imu", 1000, imu_callback);
 //	ros::Subscriber local_position_pose_subscriber = node_handle.subscribe("/mavros/local_position/pose", 1000, local_position_pose_callback);
 	ros::Subscriber landing_pad_camera_pose_subscriber = node_handle.subscribe("/landing_pad/camera_pose", 1000, landing_pad_camera_pose_callback);
 	ros::Subscriber landing_pad_whycon_pose_subscriber = node_handle.subscribe("/landing_pad/whycon_pose", 1000, landing_pad_whycon_pose_callback);
@@ -394,6 +426,7 @@ int main(int argc, char** argv)
 	ros::Subscriber yaw_displacement_subscriber = node_handle.subscribe("/landing_pad/yaw_displacement", 1000, yaw_displacement_callback);
 	ros::Subscriber odom_combined_subscriber = node_handle.subscribe("/robot_pose_ekf/odom_combined", 1000, odom_combined_callback);
 	ros::Subscriber model_states_subscriber = node_handle.subscribe("/gazebo/model_states", 1000, model_states_callback);
+	ros::Subscriber link_states_subscriber  = node_handle.subscribe("/gazebo/link_states", 1000, link_states_callback);
 
 	// create publishers
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
@@ -428,7 +461,7 @@ int main(int argc, char** argv)
 	outfile.open(oss.str(), std::ios_base::app);
 
 	// csv header
-	outfile << "iris_position_x,iris_position_y,iris_position_z,iris_linear_velocity_x,iris_linear_velocity_y,iris_linear_velocity_z,iris_angular_velocity_x,iris_angular_velocity_y,iris_angular_velocity_z,whycon_position_x,whycon_position_y,whycon_position_z,apriltag_position_x,apriltag_position_y,apriltag_position_z,landing_pad_detected" << std::endl;
+	outfile << "iris_position_x,iris_position_y,iris_position_z,iris_pitch,iris_roll,iris_yaw,iris_linear_velocity_x,iris_linear_velocity_y,iris_linear_velocity_z,iris_angular_velocity_x,iris_angular_velocity_y,iris_angular_velocity_z,camera_linear_velocity_x,camera_linear_velocity_y,camera_linear_velocity_z,camera_angular_velocity_x,camera_angular_velocity_y,camera_angular_velocity_z,whycon_position_x,whycon_position_y,whycon_position_z,apriltag_position_x,apriltag_position_y,apriltag_position_z,whycon_detected,apriltag_detected" << std::endl;
 #endif
 
 	// for transforms
@@ -445,13 +478,14 @@ int main(int argc, char** argv)
 		// callbacks
 		ros::spinOnce();
 
-#if LOG
-		landing_pad_detected = false;
-#endif
-
 		if( ros::Time::now() - landing_pad_camera_pose.header.stamp < abort_time )
 		{
 			last_target_send_time = ros::Time::now();
+/*
+#if LOG
+				landing_pad_detected = false;
+#endif
+*/
 
 			// transform pose in camera frame to pose relative to the drone in NED
 			try
@@ -464,10 +498,11 @@ int main(int argc, char** argv)
 				// publish relative pose
 				landing_pad_relative_pose_stamped_publisher.publish(landing_pad_relative_pose_stamped);
 				landing_pad_global_pose_stamped_publisher.publish(landing_pad_global_pose_stamped);
-
+/*
 #if LOG
 				landing_pad_detected = true;
 #endif
+*/
 			}
 			catch( tf2::TransformException &exception )
 			{
@@ -478,7 +513,8 @@ int main(int argc, char** argv)
 			
 			plane_distance_to_landing_pad = plane_distance_to( landing_pad_relative_pose_stamped );
 //			double descent_distance = 0.45 * abs(landing_pad_relative_pose_stamped.pose.position.z) + 0.2;
-			double descent_distance = 0.713927 * exp(0.19594 * abs(landing_pad_relative_pose_stamped.pose.position.z));
+//			double descent_distance = 0.713927 * exp(0.19594 * abs(landing_pad_relative_pose_stamped.pose.position.z));
+			double descent_distance = 0.10 * exp(0.391202 * abs(landing_pad_relative_pose_stamped.pose.position.z));
 			double close_approach_distance = 2.0 * descent_distance;
 
 /*
@@ -490,40 +526,51 @@ int main(int argc, char** argv)
 
 			// control policy
 //			if( plane_distance_to_landing_pad < 1.0 && abs(yaw_displacement) < 0.0872665 && LANDING_PHASE != DESCENT )
-			if( plane_distance_to_landing_pad < descent_distance && abs(yaw_displacement) < 0.0872665 && abs(landing_pad_relative_pose_stamped.pose.position.z) < 5 && LANDING_PHASE != DESCENT )
+			if( plane_distance_to_landing_pad < descent_distance && abs(yaw_displacement) < 0.0872665 && abs(landing_pad_relative_pose_stamped.pose.position.z) < 5)
 			{
-				pid_enable_u_publisher.publish( std_msgs_true );
-				pid_enable_yaw_publisher.publish( std_msgs_false );
-				target_yaw_rate = 0;
-				
-				LANDING_PHASE = DESCENT;
-				ROS_WARN("LANDING_PHASE: DESCENT");
+				if( LANDING_PHASE != DESCENT )
+				{
+					pid_enable_u_publisher.publish( std_msgs_true );
+					pid_enable_yaw_publisher.publish( std_msgs_false );
+					target_yaw_rate = 0;
+					
+					LANDING_PHASE = DESCENT;
+					ROS_INFO_STREAM(yaw_displacement);
+					ROS_WARN("LANDING_PHASE: DESCENT");
+				}
 			}
 //			else if( plane_distance_to_landing_pad < 1.0 && LANDING_PHASE != YAW_ALIGNMENT )
-			else if( plane_distance_to_landing_pad < descent_distance && LANDING_PHASE != YAW_ALIGNMENT && LANDING_PHASE != DESCENT)
+			else if( plane_distance_to_landing_pad < descent_distance)
 			{
-				pid_enable_u_publisher.publish( std_msgs_true );
-//				target_velocity.z = 0;
-				pid_enable_yaw_publisher.publish( std_msgs_true );
+				if( LANDING_PHASE != YAW_ALIGNMENT )
+				{
+					pid_enable_u_publisher.publish( std_msgs_true );
+	//				target_velocity.z = 0;
+					pid_enable_yaw_publisher.publish( std_msgs_true );
 
-				LANDING_PHASE = YAW_ALIGNMENT;
-				ROS_WARN("LANDING_PHASE: YAW_ALIGNMENT");
+					LANDING_PHASE = YAW_ALIGNMENT;
+					ROS_INFO_STREAM(yaw_displacement);
+					ROS_WARN("LANDING_PHASE: YAW_ALIGNMENT");
+				}
 			}
-			else if( plane_distance_to_landing_pad < close_approach_distance && LANDING_PHASE != CLOSE_APPROACH )
+			else if( plane_distance_to_landing_pad < close_approach_distance)
 			{
-				pid_enable_u_publisher.publish( std_msgs_true );
-				target_velocity.z = 0;
-				pid_enable_yaw_publisher.publish( std_msgs_false );
+				if( LANDING_PHASE != CLOSE_APPROACH )
+				{
+					pid_enable_u_publisher.publish( std_msgs_true );
+					target_velocity.z = 0;
+					pid_enable_yaw_publisher.publish( std_msgs_false );
 
-				pid_parameters.x = -0.3;
-				pid_parameters.y = -0.0;// -0.0;
-				pid_parameters.z = -0.7; //-0.7;
+					pid_parameters.x = -0.3;
+					pid_parameters.y = -0.0;// -0.0;
+					pid_parameters.z = -0.7; //-0.7;
 
-				pid_reconfigure_e_publisher.publish( pid_parameters );
-				pid_reconfigure_n_publisher.publish( pid_parameters );
+					pid_reconfigure_e_publisher.publish( pid_parameters );
+					pid_reconfigure_n_publisher.publish( pid_parameters );
 
-				LANDING_PHASE = CLOSE_APPROACH;
-				ROS_WARN("LANDING_PHASE: CLOSE_APPROACH");
+					LANDING_PHASE = CLOSE_APPROACH;
+					ROS_WARN("LANDING_PHASE: CLOSE_APPROACH");
+				}
 			}
 			else if( LANDING_PHASE != APPROACH )
 			{
@@ -571,7 +618,9 @@ int main(int argc, char** argv)
 		apriltag_pose_temp = empty_buffer;
 		try
 		{
-			whycon_pose_temp = transform_buffer.transform(landing_pad_whycon_pose, "body_enu", ros::Duration(0.1));
+			//whycon_pose_temp = transform_buffer.transform(landing_pad_whycon_pose, "body_enu", ros::Duration(0.1));
+			whycon_pose_temp = transform_buffer.transform(landing_pad_whycon_pose, "global_enu", ros::Duration(0.1));
+			landing_pad_global_pose_stamped_publisher.publish(whycon_pose_temp);
 		}
 		catch(...)
 		{
@@ -580,7 +629,8 @@ int main(int argc, char** argv)
 		}
 		try
 		{
-			apriltag_pose_temp = transform_buffer.transform(landing_pad_apriltag_pose, "body_enu", ros::Duration(0.1));
+			//apriltag_pose_temp = transform_buffer.transform(landing_pad_apriltag_pose, "body_enu", ros::Duration(0.1));
+			apriltag_pose_temp = transform_buffer.transform(landing_pad_apriltag_pose, "global_enu", ros::Duration(0.1));
 		}
 		catch(...)
 		{
@@ -591,20 +641,33 @@ int main(int argc, char** argv)
 		outfile << iris_pose.position.x;
 		outfile << "," << iris_pose.position.y;
 		outfile << "," << iris_pose.position.z;
+		outfile << "," << iris_pitch;
+		outfile << "," << iris_roll;
+		outfile << "," << iris_yaw;
 		outfile << "," << iris_twist.linear.x;
 		outfile << "," << iris_twist.linear.y;
 		outfile << "," << iris_twist.linear.z;
 		outfile << "," << iris_twist.angular.x;
 		outfile << "," << iris_twist.angular.y;
 		outfile << "," << iris_twist.angular.z;
+		outfile << "," << camera_twist.linear.x;
+		outfile << "," << camera_twist.linear.y;
+		outfile << "," << camera_twist.linear.z;
+		outfile << "," << camera_twist.angular.x;
+		outfile << "," << camera_twist.angular.y;
+		outfile << "," << camera_twist.angular.z;
 		outfile << "," << whycon_pose_temp.pose.position.x;
 		outfile << "," << whycon_pose_temp.pose.position.y;
 		outfile << "," << whycon_pose_temp.pose.position.z;
 		outfile << "," << apriltag_pose_temp.pose.position.x;
 		outfile << "," << apriltag_pose_temp.pose.position.y;
 		outfile << "," << apriltag_pose_temp.pose.position.z;
-		outfile << "," << landing_pad_detected;
+		outfile << "," << whycon_detected;
+		outfile << "," << apriltag_detected;
 		outfile << std::endl;
+
+		whycon_detected = false;
+		apriltag_detected = false;
 #endif
 
 		loop_rate.sleep();

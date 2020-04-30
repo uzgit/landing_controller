@@ -18,6 +18,7 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Float64.h>
 #include <gazebo_msgs/ModelStates.h>
+#include <gazebo_msgs/LinkStates.h>
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -116,12 +117,17 @@ double plane_distance_to_landing_pad = std::nan("1");;
 
 #if LOG
 // for analysis
-bool landing_pad_detected = false;
+bool whycon_detected = false;
+bool apriltag_detected = false;
 geometry_msgs::Pose iris_pose;
 geometry_msgs::Twist iris_twist;
+geometry_msgs::Twist camera_twist;
 geometry_msgs::PoseStamped whycon_pose_temp;
 geometry_msgs::PoseStamped apriltag_pose_temp;
 sensor_msgs::Imu imu_message;
+double iris_pitch = 0;
+double iris_roll = 0;
+double iris_yaw = 0;
 #endif
 
 #endif
