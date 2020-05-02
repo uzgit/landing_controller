@@ -17,6 +17,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Float64.h>
+#include <std_msgs/UInt8.h>
 #include <gazebo_msgs/ModelStates.h>
 #include <gazebo_msgs/LinkStates.h>
 #include <geometry_msgs/Point.h>
@@ -36,6 +37,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
+ros::Publisher landing_phase_publisher;
 ros::Publisher landing_pad_camera_pose_publisher;
 ros::Publisher landing_pad_relative_pose_stamped_publisher;
 ros::Publisher landing_pad_global_pose_stamped_publisher;
