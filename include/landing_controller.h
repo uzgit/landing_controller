@@ -14,6 +14,7 @@
 
 #include <ros/ros.h>
 #include <mavros_msgs/PositionTarget.h>
+#include <mavros_msgs/RCOut.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Float64.h>
@@ -115,7 +116,9 @@ enum LANDING_PHASES
 };
 
 int LANDING_PHASE = NOT_LANDING;
-double plane_distance_to_landing_pad = std::nan("1");;
+double plane_distance_to_landing_pad = std::nan("1");
+bool ENABLE_LANDING = false;
+const int ENABLE_LANDING_CHANNEL = 10; // (1-based indexing)
 
 #if LOG
 // for analysis
