@@ -104,6 +104,7 @@ void landing_pad_camera_pose_callback(   const geometry_msgs::PoseStamped::Const
 void landing_pad_apriltag_pose_callback( const geometry_msgs::PoseStamped::ConstPtr );
 void set_velocity_target_neu( geometry_msgs::Vector3 );
 double plane_distance_to( geometry_msgs::PoseStamped );
+double descent_distance = 0;
 
 enum LANDING_PHASES
 {
