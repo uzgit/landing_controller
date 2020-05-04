@@ -308,11 +308,11 @@ void landing_enable_callback(const mavros_msgs::RCOut::ConstPtr msg)
 {
 	if( msg->channels[ENABLE_LANDING_CHANNEL] > 1600 )
 	{
-		ENABLE_LANDING = true;
+		ENABLE_LANDING = false;
 	}
 	else
 	{
-		ENABLE_LANDING = false;
+		ENABLE_LANDING = true;
 	}	
 }
 
@@ -538,9 +538,12 @@ int main(int argc, char** argv)
 			ROS_INFO("***********");
 */
 
+			ROS_INFO("(descent_distance, close_approach, plane_distance) = (%0.3f, %0.3f, %0.3f)", descent_distance, close_approach_distance, plane_distance_to_landing_pad);
+
 			if( ENABLE_LANDING )
 			{
 				// control policy
+				// LANDING_PHASE selection
 	//			if( plane_distance_to_landing_pad < 1.0 && abs(yaw_displacement) < 0.0872665 && LANDING_PHASE != DESCENT )
 				
 	/*			
@@ -575,12 +578,18 @@ int main(int argc, char** argv)
 				{
 					if( LANDING_PHASE > YAW_ALIGNMENT )
 					{
-
 						pid_enable_yaw_publisher.publish( std_msgs_true );
 
 						LANDING_PHASE = YAW_ALIGNMENT;
 						ROS_INFO_STREAM(yaw_displacement);
 						ROS_WARN("LANDING_PHASE: YAW_ALIGNMENT");
+						
+						pid_parameters.x = -0.3;
+						pid_parameters.y = -0.025;// -0.0;
+						pid_parameters.z = -0.9; //-0.7;
+
+						pid_reconfigure_e_publisher.publish( pid_parameters );
+						pid_reconfigure_n_publisher.publish( pid_parameters );
 					}
 				}
 				else if( plane_distance_to_landing_pad < close_approach_distance)
@@ -593,9 +602,9 @@ int main(int argc, char** argv)
 						target_velocity.z = 0;
 						pid_enable_yaw_publisher.publish( std_msgs_false );
 
-						pid_parameters.x = -0.3;
-						pid_parameters.y = -0.1;// -0.0;
-						pid_parameters.z = -1.0; //-0.7;
+						pid_parameters.x = -0.4;
+						pid_parameters.y = -0.025;// -0.0;
+						pid_parameters.z = -0.7; //-0.7;
 
 						pid_reconfigure_e_publisher.publish( pid_parameters );
 						pid_reconfigure_n_publisher.publish( pid_parameters );
@@ -606,13 +615,22 @@ int main(int argc, char** argv)
 				}
 				else if( LANDING_PHASE > APPROACH )
 				{
+					pid_enable_e_publisher.publish( std_msgs_true );
+					pid_enable_n_publisher.publish( std_msgs_true );
 					pid_enable_u_publisher.publish( std_msgs_false );
 					target_velocity.z = 0;
 					pid_enable_yaw_publisher.publish( std_msgs_false );
 
+					pid_parameters.x = -0.6;
+					pid_parameters.y = -0.015;// -0.0;
+					pid_parameters.z = -0.35; //-0.7;
+
+					pid_reconfigure_e_publisher.publish( pid_parameters );
+					pid_reconfigure_n_publisher.publish( pid_parameters );
+
 					LANDING_PHASE = APPROACH;
 					ROS_WARN("LANDING_PHASE: APPROACH");
-				}
+				} // end LANDING_PHASE selection
 
 				if( abs(yaw_displacement) < 0.0875665 )
 				{
@@ -653,6 +671,26 @@ int main(int argc, char** argv)
 			} //endif( ENABLE_LANDING )
 			else
 			{
+				if( LANDING_PHASE != NOT_LANDING )
+				{
+					pid_enable_n_publisher.publish( std_msgs_false );
+					pid_enable_e_publisher.publish( std_msgs_false );
+					pid_enable_u_publisher.publish( std_msgs_false );
+
+					target_velocity.x = 0;
+					target_velocity.y = 0;
+					target_velocity.z = 0;
+					
+					set_velocity_target_neu( target_velocity, target_yaw_rate );
+
+					LANDING_PHASE = NOT_LANDING;
+				}
+			}
+		}
+		else
+		{
+			if( LANDING_PHASE != NOT_LANDING )
+			{
 				pid_enable_n_publisher.publish( std_msgs_false );
 				pid_enable_e_publisher.publish( std_msgs_false );
 				pid_enable_u_publisher.publish( std_msgs_false );
@@ -660,13 +698,11 @@ int main(int argc, char** argv)
 				target_velocity.x = 0;
 				target_velocity.y = 0;
 				target_velocity.z = 0;
+				
+				set_velocity_target_neu( target_velocity, target_yaw_rate );
 
 				LANDING_PHASE = NOT_LANDING;
 			}
-		}
-		else
-		{
-			LANDING_PHASE = NOT_LANDING;
 		}
 
 /*
