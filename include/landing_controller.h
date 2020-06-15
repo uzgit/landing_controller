@@ -31,6 +31,8 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/transform_datatypes.h>
 #include <sensor_msgs/Imu.h>
+#include <sensor_msgs/BatteryState.h>
+#include <sensor_msgs/NavSatFix.h>
 #include <tf2/LinearMath/Transform.h>
 #include <cmath>
 #include <nav_msgs/Odometry.h>
@@ -42,6 +44,9 @@ ros::Publisher landing_phase_publisher;
 ros::Publisher landing_pad_camera_pose_publisher;
 ros::Publisher landing_pad_relative_pose_stamped_publisher;
 ros::Publisher landing_pad_global_pose_stamped_publisher;
+ros::Publisher landing_pad_apriltag_global_pose_stamped_publisher;
+ros::Publisher landing_pad_whycon_global_pose_stamped_publisher;
+ros::Publisher plane_displacement_publisher;
 ros::Publisher setpoint_raw_local_publisher;
 ros::Publisher displacement_n_publisher;
 ros::Publisher displacement_e_publisher;
@@ -57,9 +62,12 @@ ros::Publisher pid_enable_u_publisher;
 ros::Publisher pid_enable_yaw_publisher;
 ros::Publisher pid_reconfigure_e_publisher;
 ros::Publisher pid_reconfigure_n_publisher;
+ros::Publisher pid_reconfigure_u_publisher;
+ros::Publisher pid_reconfigure_yaw_publisher;
 ros::Publisher vo_whycon_publisher;
 ros::Publisher vo_apriltag_publisher;
 ros::Publisher landing_pad_pose_filtered_publisher;
+ros::Publisher enable_landing_publisher;
 
 std_msgs::Float64 std_msgs_zero;
 std_msgs::Float64 setpoint_n;
@@ -76,6 +84,8 @@ geometry_msgs::PoseStamped landing_pad_relative_pose_filtered;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped_straightened;
 geometry_msgs::PoseStamped landing_pad_relative_pose_absolute_yaw_stamped;
 geometry_msgs::PoseStamped landing_pad_global_pose_stamped;
+geometry_msgs::PoseStamped landing_pad_apriltag_global_pose_stamped;
+geometry_msgs::PoseStamped landing_pad_whycon_global_pose_stamped;
 geometry_msgs::PoseStamped local_position_pose_stamped;
 geometry_msgs::Vector3 target_velocity;
 double target_yaw_rate = 0;
@@ -116,6 +126,12 @@ enum LANDING_PHASES
 	LANDED		= 0
 };
 
+geometry_msgs::Vector3 pid_parameters;
+geometry_msgs::Vector3 pid_parameters_1;
+geometry_msgs::Vector3 pid_parameters_2;
+geometry_msgs::Vector3 pid_parameters_3;
+geometry_msgs::Vector3 pid_parameters_u;
+
 int LANDING_PHASE = NOT_LANDING;
 double plane_distance_to_landing_pad = std::nan("1");
 bool ENABLE_LANDING = false;
@@ -134,6 +150,16 @@ sensor_msgs::Imu imu_message;
 double iris_pitch = 0;
 double iris_roll = 0;
 double iris_yaw = 0;
+
+geometry_msgs::Pose  landing_pad_gazebo_pose;
+geometry_msgs::Twist landing_pad_gazebo_twist;
+bool DESCENDING = false;
+int energy_consumed = 0;
+
+double latitude;
+double longitude;
+double altitude;
+
 #endif
 
 #endif

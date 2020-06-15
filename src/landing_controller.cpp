@@ -48,6 +48,15 @@ void link_states_callback(const gazebo_msgs::LinkStates::ConstPtr& msg)
 	}
 
 	camera_twist = msg->twist[i];
+
+	i = 0;
+	while( i < msg->name.size() && msg->name[i] != "landing_pad_combo::landing_pad::link" )
+	{
+		i ++;
+	}
+
+	landing_pad_gazebo_pose  = msg->pose[i];
+	landing_pad_gazebo_twist = msg->twist[i];
 }
 
 void model_states_callback(const gazebo_msgs::ModelStates::ConstPtr& msg)
@@ -67,10 +76,13 @@ void model_states_callback(const gazebo_msgs::ModelStates::ConstPtr& msg)
 
 #if LOG
 	// switch pose to ENU
+
+/*
 	double temp_x = iris_pose.position.x;
 	double temp_y = iris_pose.position.y;
 	iris_pose.position.x = -temp_y;
 	iris_pose.position.y =  temp_x;
+*/
 
 /*
 	// switch linear velocity to ENU
@@ -174,6 +186,56 @@ void control_effort_yaw_callback(const std_msgs::Float64::ConstPtr &msg)
 void yaw_displacement_callback(const std_msgs::Float64::ConstPtr &msg)
 {
 	yaw_displacement = msg->data;
+}
+
+void battery_callback(const sensor_msgs::BatteryState::ConstPtr &msg)
+{
+	// mavros was edited to hold the data from energy_consumed in the capacity field just for testing
+	energy_consumed = msg->capacity;
+}
+
+void global_position_callback(const sensor_msgs::NavSatFix::ConstPtr &msg)
+{
+	latitude  = msg->latitude;
+	longitude = msg->longitude;
+	altitude  = msg->altitude;
+}
+
+void pid_parameters_1_callback(const geometry_msgs::Vector3::ConstPtr &msg)
+{
+	pid_parameters_1.x = msg->x;
+	pid_parameters_1.y = msg->y;
+	pid_parameters_1.z = msg->z;
+
+	ROS_INFO("Reconfiguring pid parameters to (%0.2f %0.2f %0.2f) for phase 1.", msg->x, msg->y, msg->z);
+}
+
+void pid_parameters_2_callback(const geometry_msgs::Vector3::ConstPtr &msg)
+{
+	pid_parameters_2.x = msg->x;
+	pid_parameters_2.y = msg->y;
+	pid_parameters_2.z = msg->z;
+
+	ROS_INFO("Reconfiguring pid parameters to (%0.2f %0.2f %0.2f) for phase 2.", msg->x, msg->y, msg->z);
+}
+
+void pid_parameters_3_callback(const geometry_msgs::Vector3::ConstPtr &msg)
+{
+	pid_parameters_3.x = msg->x;
+	pid_parameters_3.y = msg->y;
+	pid_parameters_3.z = msg->z;
+
+	ROS_INFO("Reconfiguring pid parameters to (%0.2f %0.2f %0.2f) for phase 3.", msg->x, msg->y, msg->z);
+}
+
+void pid_parameters_u_callback(const geometry_msgs::Vector3::ConstPtr &msg)
+{
+	pid_parameters_u.x = msg->x;
+	pid_parameters_u.y = msg->y;
+	pid_parameters_u.z = msg->z;
+
+	pid_reconfigure_u_publisher.publish(pid_parameters_u);
+	ROS_INFO("Reconfiguring pid parameters to (%0.2f %0.2f %0.2f) for up dimension.", msg->x, msg->y, msg->z);
 }
 
 /*
@@ -306,14 +368,16 @@ void odom_combined_callback(const geometry_msgs::PoseWithCovarianceStamped::Cons
 
 void landing_enable_callback(const mavros_msgs::RCOut::ConstPtr msg)
 {
-	if( msg->channels[ENABLE_LANDING_CHANNEL] > 1600 )
+	if( msg->channels[ENABLE_LANDING_CHANNEL] > 1750 )
 	{
-		ENABLE_LANDING = false;
+		ENABLE_LANDING = true;
 	}
 	else
 	{
-		ENABLE_LANDING = true;
-	}	
+		ENABLE_LANDING = false;
+	}
+	
+	enable_landing_publisher.publish(ENABLE_LANDING);	
 }
 
 /*
@@ -419,8 +483,18 @@ int main(int argc, char** argv)
 	std_msgs_false.data = false;
 	std_msgs_zero.data  = 0;
 
-	geometry_msgs::Vector3 pid_parameters;
+//	geometry_msgs::Vector3 pid_parameters;
 
+	pid_parameters_1.x = -0.7;
+	pid_parameters_1.y = -0.0;
+	pid_parameters_1.z = -0.4;
+	pid_parameters_2.x = -0.3;
+	pid_parameters_2.y = -0.0;
+	pid_parameters_2.z = -0.8;
+	pid_parameters_3.x = -0.3;
+	pid_parameters_3.y = -0.0;
+	pid_parameters_3.z = -0.95;
+	
 	// create node handle
 	ros::NodeHandle node_handle;
 	
@@ -440,12 +514,22 @@ int main(int argc, char** argv)
 	ros::Subscriber model_states_subscriber = node_handle.subscribe("/gazebo/model_states", 1000, model_states_callback);
 	ros::Subscriber link_states_subscriber  = node_handle.subscribe("/gazebo/link_states", 1000, link_states_callback);
 	ros::Subscriber landing_enable_subscriber = node_handle.subscribe("/mavros/rc/out", 1000, landing_enable_callback);
+	ros::Subscriber battery_subscriber = node_handle.subscribe("/mavros/battery", 1000, battery_callback);
+	ros::Subscriber global_position_subscriber = node_handle.subscribe("/mavros/global_position/global", 1000, global_position_callback);
+	ros::Subscriber pid_parameters_1_subscriber = node_handle.subscribe("/landing_controller/pid_parameters_1", 1000, pid_parameters_1_callback);
+	ros::Subscriber pid_parameters_2_subscriber = node_handle.subscribe("/landing_controller/pid_parameters_2", 1000, pid_parameters_2_callback);
+	ros::Subscriber pid_parameters_3_subscriber = node_handle.subscribe("/landing_controller/pid_parameters_3", 1000, pid_parameters_3_callback);
+	ros::Subscriber pid_parameters_u_subscriber = node_handle.subscribe("/landing_controller/pid_parameters_u", 1000, pid_parameters_u_callback);
 
 	// create publishers
+	enable_landing_publisher = node_handle.advertise<std_msgs::Bool>("/landing_controller/enabled", 1000);
 	landing_phase_publisher = node_handle.advertise<std_msgs::UInt8>("/landing_phase", 1000);
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
+	landing_pad_apriltag_global_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/apriltag_global_pose_stamped", 1000);
+	landing_pad_whycon_global_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/whycon_global_pose_stamped", 1000);
 	landing_pad_global_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/global_pose_stamped", 1000);
 	landing_pad_relative_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/relative_pose_stamped", 1000);
+	plane_displacement_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/plane_displacement", 1000);
 	setpoint_raw_local_publisher = node_handle.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 1000);
 	displacement_n_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/body_neu/displacement/n", 1000);
 	displacement_e_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/body_neu/displacement/e", 1000);
@@ -461,6 +545,8 @@ int main(int argc, char** argv)
 	pid_enable_yaw_publisher = node_handle.advertise<std_msgs::Bool>("/pid/pid_enable/yaw_rate/", 1000);
 	pid_reconfigure_e_publisher = node_handle.advertise<geometry_msgs::Vector3>("/pid/reconfigure_topic/e", 1000);
 	pid_reconfigure_n_publisher = node_handle.advertise<geometry_msgs::Vector3>("/pid/reconfigure_topic/n", 1000);
+	pid_reconfigure_u_publisher = node_handle.advertise<geometry_msgs::Vector3>("/pid/reconfigure_topic/u", 1000);
+	pid_reconfigure_yaw_publisher = node_handle.advertise<geometry_msgs::Vector3>("/pid/reconfigure_topic/yaw", 1000);
 	vo_whycon_publisher = node_handle.advertise<nav_msgs::Odometry>("/ekf_input/odom_whycon_enu", 1000);
 	vo_apriltag_publisher = node_handle.advertise<nav_msgs::Odometry>("/ekf_input/odom_april_enu", 1000);
 	landing_pad_pose_filtered_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/relative_pose_filtered", 1000);
@@ -475,7 +561,7 @@ int main(int argc, char** argv)
 	outfile.open(oss.str(), std::ios_base::app);
 
 	// csv header
-	outfile << "iris_position_x,iris_position_y,iris_position_z,iris_pitch,iris_roll,iris_yaw,iris_linear_velocity_x,iris_linear_velocity_y,iris_linear_velocity_z,iris_angular_velocity_x,iris_angular_velocity_y,iris_angular_velocity_z,camera_linear_velocity_x,camera_linear_velocity_y,camera_linear_velocity_z,camera_angular_velocity_x,camera_angular_velocity_y,camera_angular_velocity_z,whycon_position_x,whycon_position_y,whycon_position_z,apriltag_position_x,apriltag_position_y,apriltag_position_z,whycon_detected,apriltag_detected" << std::endl;
+	outfile << "time,iris_position_x,iris_position_y,iris_position_z,iris_pitch,iris_roll,iris_yaw,iris_linear_velocity_x,iris_linear_velocity_y,iris_linear_velocity_z,iris_angular_velocity_x,iris_angular_velocity_y,iris_angular_velocity_z,camera_linear_velocity_x,camera_linear_velocity_y,camera_linear_velocity_z,camera_angular_velocity_x,camera_angular_velocity_y,camera_angular_velocity_z,whycon_position_x,whycon_position_y,whycon_position_z,apriltag_position_x,apriltag_position_y,apriltag_position_z,whycon_detected,apriltag_detected,landing_pad_position_x,landing_pad_position_y,landing_pad_position_z,landing_pad_linear_velocity_x,landing_pad_linear_velocity_y,landing_pad_linear_velocity_z,landing_pad_angular_velocity_x,landing_pad_angular_velocity_y,landing_pad_angular_velocity_z,landing_phase,kp,ki,kd,yaw_displacement,descending,energy_consumed,latitude,longitude,altitude" << std::endl;
 #endif
 
 	// for transforms
@@ -501,7 +587,7 @@ int main(int argc, char** argv)
 #endif
 */
 
-			// transform pose in camera frame to pose relative to the drone in NED
+			// transform pose in camera frame to pose relative to the drone in ENU
 			try
 			{
 				// determine how to react to the landing pad detection
@@ -511,7 +597,10 @@ int main(int argc, char** argv)
 
 				// publish relative pose
 				landing_pad_relative_pose_stamped_publisher.publish(landing_pad_relative_pose_stamped);
+
+				landing_pad_global_pose_stamped = transform_buffer.transform(landing_pad_camera_pose, "global_enu", ros::Duration(0.1));
 				landing_pad_global_pose_stamped_publisher.publish(landing_pad_global_pose_stamped);
+				
 /*
 #if LOG
 				landing_pad_detected = true;
@@ -523,14 +612,40 @@ int main(int argc, char** argv)
 				ROS_WARN("main loop: %s", exception.what());
 			}
 
+			try
+			{
+				if( apriltag_detected )
+				{
+					landing_pad_apriltag_global_pose_stamped = transform_buffer.transform(landing_pad_apriltag_pose, "global_enu", ros::Duration(0.1));
+					landing_pad_apriltag_global_pose_stamped_publisher.publish(landing_pad_apriltag_global_pose_stamped);
+				}
+			}
+			catch( tf2::TransformException &exception )
+			{
+				ROS_WARN("main loop: %s", exception.what());
+			}
+			try
+			{
+				if( whycon_detected )
+				{
+					landing_pad_whycon_global_pose_stamped = transform_buffer.transform(landing_pad_whycon_pose, "global_enu", ros::Duration(0.1));
+					landing_pad_whycon_global_pose_stamped_publisher.publish(landing_pad_whycon_global_pose_stamped);
+				}
+			}
+			catch( tf2::TransformException &exception )
+			{
+				ROS_WARN("main loop: %s", exception.what());
+			}
+
+
 			// Direct the drone towards the landing pad
 			
 			plane_distance_to_landing_pad = plane_distance_to( landing_pad_relative_pose_stamped );
-
+			plane_displacement_publisher.publish(plane_distance_to_landing_pad);
 			// tight descent
-//			descent_distance = 0.24 * exp(0.28 * abs(landing_pad_relative_pose_stamped.pose.position.z));
-			// looser
-			descent_distance = 0.17 * exp(0.36 * abs(landing_pad_relative_pose_stamped.pose.position.z));
+			descent_distance = 0.24 * exp(0.36 * abs(landing_pad_relative_pose_stamped.pose.position.z));
+//			descent_distance = 0.12 * exp(0.36 * abs(landing_pad_relative_pose_stamped.pose.position.z)); // initial
+//			descent_distance = 0.15 * exp(0.4 * abs(landing_pad_relative_pose_stamped.pose.position.z)); // better
 			double close_approach_distance = 3.0 * descent_distance;
 
 /*
@@ -540,7 +655,7 @@ int main(int argc, char** argv)
 			ROS_INFO("***********");
 */
 
-			ROS_INFO("(descent_distance, close_approach, plane_distance) = (%0.3f, %0.3f, %0.3f)", descent_distance, close_approach_distance, plane_distance_to_landing_pad);
+//			ROS_INFO("(descent_distance, close_approach, plane_distance) = (%0.3f, %0.3f, %0.3f)", descent_distance, close_approach_distance, plane_distance_to_landing_pad);
 //			ROS_INFO_STREAM(descent_distance);
 
 			if( ENABLE_LANDING )
@@ -564,7 +679,7 @@ int main(int argc, char** argv)
 				else
 	*/
 				// commit to the landing entirely
-				if( LANDING_PHASE == DESCENT && abs(landing_pad_relative_pose_stamped.pose.position.z) < 0.1 )
+				if( LANDING_PHASE == DESCENT && abs(landing_pad_relative_pose_stamped.pose.position.z) < 0.14 )
 				{
 					pid_enable_yaw_publisher.publish( std_msgs_false );
 					pid_enable_e_publisher.publish( std_msgs_false );
@@ -580,7 +695,7 @@ int main(int argc, char** argv)
 				else if( LANDING_PHASE == YAW_ALIGNMENT && plane_distance_to_landing_pad < descent_distance && abs(yaw_displacement) < 0.0872665 && abs(landing_pad_relative_pose_stamped.pose.position.z) < 5)
 				{
 					pid_enable_u_publisher.publish( std_msgs_true );
-					pid_enable_yaw_publisher.publish( std_msgs_false );
+					pid_enable_yaw_publisher.publish( std_msgs_true );
 					target_yaw_rate = 0;
 					
 					LANDING_PHASE = DESCENT;
@@ -591,20 +706,30 @@ int main(int argc, char** argv)
 				else if( LANDING_PHASE == CLOSE_APPROACH && plane_distance_to_landing_pad < descent_distance )
 				{
 					pid_enable_yaw_publisher.publish( std_msgs_true );
-					pid_enable_e_publisher.publish( std_msgs_true );
-					pid_enable_n_publisher.publish( std_msgs_true );
-					pid_enable_u_publisher.publish( std_msgs_true );
+//					pid_enable_e_publisher.publish( std_msgs_true );
+//					pid_enable_n_publisher.publish( std_msgs_true );
+//					pid_enable_u_publisher.publish( std_msgs_true );
 
 					LANDING_PHASE = YAW_ALIGNMENT;
 //					ROS_INFO_STREAM(yaw_displacement);
 					ROS_WARN("LANDING_PHASE: YAW_ALIGNMENT");
-					
+	
 					pid_parameters.x = -0.3;
-					pid_parameters.y = -0.03;// -0.0;
+					pid_parameters.y = -0.0; // 0 m/s
+//					pid_parameters.y = -0.022;// 1 m/s
 					pid_parameters.z = -0.95; //-0.7;
 
-					pid_reconfigure_e_publisher.publish( pid_parameters );
-					pid_reconfigure_n_publisher.publish( pid_parameters );
+/*
+					pid_parameters.x = -0.3;
+					pid_parameters.y = -0.0; // 0 m/s
+					pid_parameters.z = -0.8; //-0.7;
+*/				
+//					double tmp = pid_parameters_3.y;
+//					pid_parameters_3.y = 0;
+					pid_reconfigure_e_publisher.publish( pid_parameters_3 );
+
+//					pid_parameters_3.y = tmp;
+					pid_reconfigure_n_publisher.publish( pid_parameters_3 );
 				}
 				else if( LANDING_PHASE == APPROACH && plane_distance_to_landing_pad < close_approach_distance)
 				{
@@ -614,12 +739,21 @@ int main(int argc, char** argv)
 					target_velocity.z = 0;
 					pid_enable_yaw_publisher.publish( std_msgs_false );
 
-					pid_parameters.x = -0.4;//-0.45;
+// better
+					pid_parameters.x = -0.3;//-0.45;
+					pid_parameters.y = -0.0;// -0.0;
+					pid_parameters.z = -0.8;//-0.9; //-0.7;
+/*
+					pid_parameters.x = -0.3;//-0.45;
 					pid_parameters.y = -0.0;// -0.0;
 					pid_parameters.z = -0.7;//-0.9; //-0.7;
+*/
+//					double tmp = pid_parameters_2.y;
+//					pid_parameters_2.y = 0;
+					pid_reconfigure_e_publisher.publish( pid_parameters_2 );
 
-					pid_reconfigure_e_publisher.publish( pid_parameters );
-					pid_reconfigure_n_publisher.publish( pid_parameters );
+//					pid_parameters_2.y = tmp;
+					pid_reconfigure_n_publisher.publish( pid_parameters_2 );
 
 					LANDING_PHASE = CLOSE_APPROACH;
 					ROS_WARN("LANDING_PHASE: CLOSE_APPROACH");
@@ -634,31 +768,51 @@ int main(int argc, char** argv)
 
 					pid_parameters.x = -0.7; //-0.7;
 					pid_parameters.y = -0.0;// -0.0;
-					pid_parameters.z = -0.5;//-0.35; //-0.7;
+					pid_parameters.z = -0.4;//-0.35; //-0.7;
 
-					pid_reconfigure_e_publisher.publish( pid_parameters );
-					pid_reconfigure_n_publisher.publish( pid_parameters );
+					pid_reconfigure_e_publisher.publish( pid_parameters_1 );
+					pid_reconfigure_n_publisher.publish( pid_parameters_1 );
+/*
+					pid_reconfigure_e_publisher.publish( pid_parameters_3 );
+					pid_reconfigure_n_publisher.publish( pid_parameters_3 );
+*/
 
 					LANDING_PHASE = APPROACH;
 					ROS_WARN("LANDING_PHASE: APPROACH");
 				} // end LANDING_PHASE selection
 
-				if( plane_distance_to_landing_pad < descent_distance )
+				// handle descent and yaw correction during normal landing phases
+				if( LANDING_PHASE != LANDED )
 				{
-					pid_enable_u_publisher.publish( std_msgs_true );
-				}
-				else
-				{
-					pid_enable_u_publisher.publish( std_msgs_false );
-					target_velocity.z = 0;
-				}
+					// descend if within descent region
+					if( plane_distance_to_landing_pad < descent_distance )
+					{
+						pid_enable_u_publisher.publish( std_msgs_true );
+						DESCENDING = true;
+					}
+					// stop descent if not within descent region
+					else
+					{
+						pid_enable_u_publisher.publish( std_msgs_false );
+						target_velocity.z = 0;
+						DESCENDING = false;
+					}
 
-				if( abs(yaw_displacement) < 0.0875665 )
-				{
-					pid_enable_yaw_publisher.publish(std_msgs_false);
-					target_yaw_rate = 0;
+					// stop yaw correction if aligned
+/*
+					if( abs(yaw_displacement) < 0.0349066 ) // 2 degrees // 0.0875665 ) // 5 degrees
+					{
+						pid_enable_yaw_publisher.publish(std_msgs_false);
+						target_yaw_rate = 0;
+					}
+*/
+/*
+					else if( plane_distance_to_landing_pad < 0.5 * descent_distance )
+					{
+						pid_enable_yaw_publisher.publish(std_msgs_true);
+					}
+*/
 				}
-
 	//			ROS_INFO_STREAM(plane_distance_to_landing_pad);
 /*
 				if( LANDING_PHASE == YAW_ALIGNMENT )
@@ -687,8 +841,6 @@ int main(int argc, char** argv)
 				displacement_u_setpoint_publisher.publish( std_msgs_zero );
 				displacement_yaw_setpoint_publisher.publish( std_msgs_zero );
 			
-				// approach using velocity
-	//				set_velocity_target_neu( target_velocity );
 				set_velocity_target_neu( target_velocity, target_yaw_rate );
 			} //endif( ENABLE_LANDING )
 			else
@@ -726,7 +878,6 @@ int main(int argc, char** argv)
 				LANDING_PHASE = NOT_LANDING;
 			}
 		}
-
 /*
 #if LOG		
 		geometry_msgs::PoseStamped empty_buffer;
@@ -754,7 +905,8 @@ int main(int argc, char** argv)
 			apriltag_pose_temp = empty_buffer;
 		}
 		
-		outfile << iris_pose.position.x;
+		outfile << ros::Time::now();
+		outfile << "," << iris_pose.position.x;
 		outfile << "," << iris_pose.position.y;
 		outfile << "," << iris_pose.position.z;
 		outfile << "," << iris_pitch;
@@ -780,6 +932,25 @@ int main(int argc, char** argv)
 		outfile << "," << apriltag_pose_temp.pose.position.z;
 		outfile << "," << whycon_detected;
 		outfile << "," << apriltag_detected;
+		outfile << "," << landing_pad_gazebo_pose.position.x;
+		outfile << "," << landing_pad_gazebo_pose.position.y;
+		outfile << "," << landing_pad_gazebo_pose.position.z;
+		outfile << "," << landing_pad_gazebo_twist.linear.x;
+		outfile << "," << landing_pad_gazebo_twist.linear.y;
+		outfile << "," << landing_pad_gazebo_twist.linear.z;
+		outfile << "," << landing_pad_gazebo_twist.angular.x;
+		outfile << "," << landing_pad_gazebo_twist.angular.y;
+		outfile << "," << landing_pad_gazebo_twist.angular.z;
+		outfile << "," << LANDING_PHASE;
+		outfile << "," << pid_parameters.x;
+		outfile << "," << pid_parameters.y;
+		outfile << "," << pid_parameters.z;
+		outfile << "," << yaw_displacement;
+		outfile << "," << DESCENDING;
+		outfile << "," << energy_consumed;
+		outfile << "," << latitude;
+		outfile << "," << longitude;
+		outfile << "," << altitude;
 		outfile << std::endl;
 
 		whycon_detected = false;
