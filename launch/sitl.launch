@@ -8,7 +8,7 @@
 	<arg name="camInfo" default="/camera/camera_info" doc="camera_info topic"/>
 	<arg name="camRaw" default="/camera/image_raw" doc="image_raw topic"/>
 
-	<arg name="idBits" default="0" doc="Number of encoded bits"/>
+	<arg name="idBits" default="2" doc="Number of encoded bits"/>
 	<arg name="idSamples" default="360" doc="Number of samples to detect ID"/>
 	<arg name="hammingDist" default="0" doc="Hamming distance used for ID"/>
 	<arg name="maxMarkers" default="1" doc="Maximum possible amount of markers to be tracked"/>
