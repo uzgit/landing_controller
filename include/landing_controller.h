@@ -14,6 +14,7 @@
 
 #include <ros/ros.h>
 #include <mavros_msgs/PositionTarget.h>
+#include <mavros_msgs/State.h>
 #include <mavros_msgs/RCOut.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
@@ -44,7 +45,7 @@ ros::Publisher landing_phase_publisher;
 ros::Publisher landing_pad_camera_pose_publisher;
 ros::Publisher landing_pad_relative_pose_stamped_publisher;
 ros::Publisher landing_pad_global_pose_stamped_publisher;
-ros::Publisher landing_pad_apriltag_global_pose_stamped_publisher;
+//ros::Publisher landing_pad_apriltag_global_pose_stamped_publisher;
 ros::Publisher landing_pad_whycon_global_pose_stamped_publisher;
 ros::Publisher plane_displacement_publisher;
 ros::Publisher setpoint_raw_local_publisher;
@@ -65,7 +66,7 @@ ros::Publisher pid_reconfigure_n_publisher;
 ros::Publisher pid_reconfigure_u_publisher;
 ros::Publisher pid_reconfigure_yaw_publisher;
 ros::Publisher vo_whycon_publisher;
-ros::Publisher vo_apriltag_publisher;
+//ros::Publisher vo_apriltag_publisher;
 ros::Publisher landing_pad_pose_filtered_publisher;
 ros::Publisher enable_landing_publisher;
 
@@ -78,20 +79,20 @@ std_msgs::Bool std_msgs_false;
 
 geometry_msgs::PoseStamped landing_pad_camera_pose;
 geometry_msgs::PoseStamped landing_pad_whycon_pose;
-geometry_msgs::PoseStamped landing_pad_apriltag_pose;
+//geometry_msgs::PoseStamped landing_pad_apriltag_pose;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped;
 geometry_msgs::PoseStamped landing_pad_relative_pose_filtered;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped_straightened;
 geometry_msgs::PoseStamped landing_pad_relative_pose_absolute_yaw_stamped;
 geometry_msgs::PoseStamped landing_pad_global_pose_stamped;
-geometry_msgs::PoseStamped landing_pad_apriltag_global_pose_stamped;
+//geometry_msgs::PoseStamped landing_pad_apriltag_global_pose_stamped;
 geometry_msgs::PoseStamped landing_pad_whycon_global_pose_stamped;
 geometry_msgs::PoseStamped local_position_pose_stamped;
 geometry_msgs::Vector3 target_velocity;
 double target_yaw_rate = 0;
 double yaw_displacement = std::nan("1");
-nav_msgs::Odometry apriltag_odometry_message;
-nav_msgs::Odometry whycon_odometry_message;
+//nav_msgs::Odometry apriltag_odometry_message;
+//nav_msgs::Odometry whycon_odometry_message;
 
 tf2_ros::Buffer transform_buffer;
 
@@ -111,7 +112,7 @@ void control_effort_e_callback( const std_msgs::Float64::ConstPtr );
 void control_effort_u_callback( const std_msgs::Float64::ConstPtr );
 void landing_pad_whycon_pose_callback(   const geometry_msgs::PoseStamped::ConstPtr );
 void landing_pad_camera_pose_callback(   const geometry_msgs::PoseStamped::ConstPtr );
-void landing_pad_apriltag_pose_callback( const geometry_msgs::PoseStamped::ConstPtr );
+//void landing_pad_apriltag_pose_callback( const geometry_msgs::PoseStamped::ConstPtr );
 void set_velocity_target_neu( geometry_msgs::Vector3 );
 double plane_distance_to( geometry_msgs::PoseStamped );
 double descent_distance = 0;
@@ -140,12 +141,12 @@ const int ENABLE_LANDING_CHANNEL = 10; // (1-based indexing)
 #if LOG
 // for analysis
 bool whycon_detected = false;
-bool apriltag_detected = false;
+//bool apriltag_detected = false;
 geometry_msgs::Pose iris_pose;
 geometry_msgs::Twist iris_twist;
 geometry_msgs::Twist camera_twist;
 geometry_msgs::PoseStamped whycon_pose_temp;
-geometry_msgs::PoseStamped apriltag_pose_temp;
+//geometry_msgs::PoseStamped apriltag_pose_temp;
 sensor_msgs::Imu imu_message;
 double iris_pitch = 0;
 double iris_roll = 0;

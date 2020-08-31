@@ -188,10 +188,7 @@ install(TARGETS ${PROJECT_NAME}
 # )
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
-install(FILES
-  launch/sitl.launch
-  launch/test.launch
-  # myfile2
+install(DIRECTORY launch/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 

@@ -247,19 +247,19 @@ float32 yaw
 float32 yaw_rate
 */
 
-void set_position_target_neu( geometry_msgs::Point target_position)
+void set_position_target_neu( geometry_msgs::Vector3 _target_position)
 {
 	mavros_msgs::PositionTarget buffer;
 
 	buffer.header.stamp = ros::Time::now();
 	buffer.header.frame_id = "world";
-	buffer.coordinate_frame = 9;
+	buffer.coordinate_frame = 8;
 
 	buffer.type_mask = 4088;
 
-	buffer.position.x = target_position.y;
-	buffer.position.y = -target_position.x;
-	buffer.position.z = target_position.z;
+	buffer.position.x = _target_position.x;
+	buffer.position.y = _target_position.y;
+	buffer.position.z = _target_position.z;
 
 	setpoint_raw_local_publisher.publish(buffer);
 }
@@ -463,8 +463,214 @@ int main(int argc, char** argv)
 //			descent_distance = 0.15 * exp(0.4 * abs(landing_pad_relative_pose_stamped.pose.position.z)); // better
 			double close_approach_distance = 5.0 * descent_distance;
 
-			set_position_target_neu(landing_pad_relative_pose_stamped.pose.position);
+			if( ENABLE_LANDING )
+			{
+				// control policy
+				// commit to the landing entirely
+//				if( LANDING_PHASE == DESCENT && abs(landing_pad_relative_pose_stamped.pose.position.z) < 0.14 )
+				if( LANDING_PHASE == CLOSE_APPROACH && abs(landing_pad_relative_pose_stamped.pose.position.z) < 0.14 )
+				{
+					pid_enable_yaw_publisher.publish( std_msgs_false );
+					pid_enable_e_publisher.publish( std_msgs_false );
+					pid_enable_n_publisher.publish( std_msgs_false );
+					pid_enable_u_publisher.publish( std_msgs_false );
+
+					target_yaw_rate = 0;
+					target_velocity.z = -10;
+
+					LANDING_PHASE = LANDED;
+					ROS_WARN("LANDING_PHASE: LANDED");
+				}	
+				//else if( LANDING_PHASE == YAW_ALIGNMENT && plane_distance_to_landing_pad < descent_distance && abs(yaw_displacement) < 0.0872665 && abs(landing_pad_relative_pose_stamped.pose.position.z) < 5)
+				else if( LANDING_PHASE == YAW_ALIGNMENT && plane_distance_to_landing_pad < descent_distance )
+				{
+					pid_enable_u_publisher.publish( std_msgs_true );
+					pid_enable_yaw_publisher.publish( std_msgs_true );
+					target_yaw_rate = 0;
+					
+					LANDING_PHASE = DESCENT;
+					ROS_INFO_STREAM(yaw_displacement);
+					ROS_WARN("LANDING_PHASE: DESCENT");
+					
+					pid_reconfigure_e_publisher.publish( pid_parameters_3 );
+					pid_reconfigure_n_publisher.publish( pid_parameters_3 );
+				}
+/*
+				else if( LANDING_PHASE == CLOSE_APPROACH && plane_distance_to_landing_pad < descent_distance )
+				{
+					pid_enable_yaw_publisher.publish( std_msgs_true );
+//					pid_enable_e_publisher.publish( std_msgs_true );
+//					pid_enable_n_publisher.publish( std_msgs_true );
+//					pid_enable_u_publisher.publish( std_msgs_true );
+
+					LANDING_PHASE = YAW_ALIGNMENT;
+//					ROS_INFO_STREAM(yaw_displacement);
+					ROS_WARN("LANDING_PHASE: YAW_ALIGNMENT");
+	
+					pid_parameters.x = -0.3;
+					pid_parameters.y = -0.0; // 0 m/s
+//					pid_parameters.y = -0.022;// 1 m/s
+					pid_parameters.z = -0.95; //-0.7;
+
+//					pid_parameters.x = -0.3;
+//					pid_parameters.y = -0.0; // 0 m/s
+//					pid_parameters.z = -0.8; //-0.7;
+//					double tmp = pid_parameters_3.y;
+//					pid_parameters_3.y = 0;
+					pid_reconfigure_e_publisher.publish( pid_parameters_3 );
+
+//					pid_parameters_3.y = tmp;
+					pid_reconfigure_n_publisher.publish( pid_parameters_3 );
+				}
+*/
+				else if( LANDING_PHASE == APPROACH && plane_distance_to_landing_pad < close_approach_distance)
+				{
+					pid_enable_e_publisher.publish( std_msgs_true );
+					pid_enable_n_publisher.publish( std_msgs_true );
+					pid_enable_u_publisher.publish( std_msgs_false );
+					target_velocity.z = 0;
+					pid_enable_yaw_publisher.publish( std_msgs_false );
+
+// better
+					pid_parameters.x = -0.3;//-0.45;
+					pid_parameters.y = -0.0;// -0.0;
+					pid_parameters.z = -0.8;//-0.9; //-0.7;
+/*
+					pid_parameters.x = -0.3;//-0.45;
+					pid_parameters.y = -0.0;// -0.0;
+					pid_parameters.z = -0.7;//-0.9; //-0.7;
+*/
+//					double tmp = pid_parameters_2.y;
+//					pid_parameters_2.y = 0;
+					pid_reconfigure_e_publisher.publish( pid_parameters_2 );
+
+//					pid_parameters_2.y = tmp;
+					pid_reconfigure_n_publisher.publish( pid_parameters_2 );
+
+					LANDING_PHASE = CLOSE_APPROACH;
+					ROS_WARN("LANDING_PHASE: CLOSE_APPROACH");
+				}
+				else if( LANDING_PHASE > APPROACH )
+				{
+					pid_enable_e_publisher.publish( std_msgs_true );
+					pid_enable_n_publisher.publish( std_msgs_true );
+					pid_enable_u_publisher.publish( std_msgs_false );
+					target_velocity.z = 0;
+					pid_enable_yaw_publisher.publish( std_msgs_false );
+
+					pid_parameters.x = -0.7; //-0.7;
+					pid_parameters.y = -0.0;// -0.0;
+					pid_parameters.z = -0.4;//-0.35; //-0.7;
+
+					pid_reconfigure_e_publisher.publish( pid_parameters_1 );
+					pid_reconfigure_n_publisher.publish( pid_parameters_1 );
+/*
+					pid_reconfigure_e_publisher.publish( pid_parameters_3 );
+					pid_reconfigure_n_publisher.publish( pid_parameters_3 );
+*/
+
+					LANDING_PHASE = APPROACH;
+					ROS_WARN("LANDING_PHASE: APPROACH");
+				} // end LANDING_PHASE selection
+
+				// handle descent and yaw correction during normal landing phases
+				if( LANDING_PHASE != LANDED )
+				{
+					// descend if within descent region
+					if( plane_distance_to_landing_pad < descent_distance )
+					{
+						pid_enable_u_publisher.publish( std_msgs_true );
+						DESCENDING = true;
+					}
+					// stop descent if not within descent region
+					else
+					{
+						pid_enable_u_publisher.publish( std_msgs_false );
+						target_velocity.z = 0;
+						DESCENDING = false;
+					}
+
+					// stop yaw correction if aligned
+/*
+					if( abs(yaw_displacement) < 0.0349066 ) // 2 degrees // 0.0875665 ) // 5 degrees
+					{
+						pid_enable_yaw_publisher.publish(std_msgs_false);
+						target_yaw_rate = 0;
+					}
+*/
+/*
+					else if( plane_distance_to_landing_pad < 0.5 * descent_distance )
+					{
+						pid_enable_yaw_publisher.publish(std_msgs_true);
+					}
+*/
+				}
+	//			ROS_INFO_STREAM(plane_distance_to_landing_pad);
+/*
+				if( LANDING_PHASE == YAW_ALIGNMENT )
+				{
+					if( abs(landing_pad_relative_pose_stamped.pose.position.z) < 5 )
+					{
+						pid_enable_u_publisher.publish( std_msgs_false );
+						target_velocity.z = 0;
+					}
+					else
+					{
+						pid_enable_u_publisher.publish( std_msgs_true );
+					}
+				}
+*/
+
+				// publish PID states
+				displacement_n_publisher.publish( landing_pad_relative_pose_stamped.pose.position.y );
+				displacement_e_publisher.publish( landing_pad_relative_pose_stamped.pose.position.x );
+				displacement_u_publisher.publish( landing_pad_relative_pose_stamped.pose.position.z );
+				// yaw displacement is published by gimbal controller
+
+				// publish PID setpoints (always 0)
+				displacement_n_setpoint_publisher.publish( std_msgs_zero );
+				displacement_e_setpoint_publisher.publish( std_msgs_zero );
+				displacement_u_setpoint_publisher.publish( std_msgs_zero );
+				displacement_yaw_setpoint_publisher.publish( std_msgs_zero );
+			
+				set_velocity_target_neu( target_velocity, target_yaw_rate );
+			} //endif( ENABLE_LANDING )
+			else
+			{
+				if( LANDING_PHASE != NOT_LANDING )
+				{
+					pid_enable_n_publisher.publish( std_msgs_false );
+					pid_enable_e_publisher.publish( std_msgs_false );
+					pid_enable_u_publisher.publish( std_msgs_false );
+
+					target_velocity.x = 0;
+					target_velocity.y = 0;
+					target_velocity.z = 0;
+					
+					set_velocity_target_neu( target_velocity, target_yaw_rate );
+
+					LANDING_PHASE = NOT_LANDING;
+				}
+			}
 		}
+		else
+		{
+			if( LANDING_PHASE != NOT_LANDING )
+			{
+				pid_enable_n_publisher.publish( std_msgs_false );
+				pid_enable_e_publisher.publish( std_msgs_false );
+				pid_enable_u_publisher.publish( std_msgs_false );
+
+				target_velocity.x = 0;
+				target_velocity.y = 0;
+				target_velocity.z = 0;
+				
+				set_velocity_target_neu( target_velocity, target_yaw_rate );
+
+				LANDING_PHASE = NOT_LANDING;
+			}
+		}
+		landing_phase_publisher.publish(LANDING_PHASE);
 		loop_rate.sleep();
 	}
 

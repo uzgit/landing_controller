@@ -1,42 +1,85 @@
 <?xml version="1.0"?>
 <launch>
 
-	<!--node pkg="tf" type="static_transform_publisher" name="static_transform_publisher_example" args="x y z x y z w parent_frame child_frame frequency " /-->
-
-	<!-- *********************************************************************** -->
-
-	<arg name="camInfo" default="/camera/camera_info" doc="camera_info topic"/>
-	<arg name="camRaw" default="/camera/image_raw" doc="image_raw topic"/>
-
-	<arg name="idBits" default="2" doc="Number of encoded bits"/>
-	<arg name="idSamples" default="360" doc="Number of samples to detect ID"/>
-	<arg name="hammingDist" default="0" doc="Hamming distance used for ID"/>
-	<arg name="maxMarkers" default="1" doc="Maximum possible amount of markers to be tracked"/>
-	<arg name="useGui" default="true" doc="Whether to use GUI"/>
-
 	<arg name="fontPath" value="$(find whycon_ros)/etc/font.ttf"/>
 	<arg name="calibDefPath" value="$(find whycon_ros)/etc/default.cal"/>
 
-	<node pkg="whycon_ros" type="whycon_ros" name="whycon_ros" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" respawn="true" >
+	<include file="$(find whycon_ros)/launch/whycon_sitl.launch" />
+	<include file="$(find gimbal_controller)/launch/sitl.launch" />
 
-		<remap from="/camera/camera_info" to="$(arg camInfo)"/>
-		<remap from="/camera/image_raw" to="$(arg camRaw)"/>
+        <node name="velocity_north" pkg="pid" type="controller" ns="pid" output="screen" >
+                <param name="node_name" value="velocity_north" />
+                <param name="Kp" value="-0.6" />
+                <param name="Ki" value="-0.0" />
+                <param name="Kd" value="-0.1" />
+                <param name="upper_limit" value="3" />
+                <param name="lower_limit" value="-3" />
+                <param name="windup_limit" value="2" />
+                <param name="max_loop_frequency" value="100.0" />
+                <param name="min_loop_frequency" value="100.0" />
+                <remap from="state" to="/landing_pad/body_neu/displacement/n" />
+                <remap from="setpoint" to="/pid/body_neu/setpoint/n" />
+                <remap from="control_effort" to="control_effort/n" />
+                <remap from="pid_enable" to="pid_enable/n" />
+                <!--remap from="reconfigure_topic" to="reconfigure_topic/n" /-->
+                <param name="reconfigure_topic" value="reconfigure_topic/n" />
+        </node>
+        <node name="velocity_east" pkg="pid" type="controller" ns="pid" output="screen" >
+                <param name="node_name" value="velocity_east" />
+                <param name="Kp" value="0.6" />
+                <param name="Ki" value="0.0" />
+                <param name="Kd" value="0.1" />
+                <param name="upper_limit" value="3" />
+                <param name="lower_limit" value="-3" />
+                <param name="windup_limit" value="2" />
+                <param name="max_loop_frequency" value="100.0" />
+                <param name="min_loop_frequency" value="100.0" />
+                <remap from="state" to="/landing_pad/body_neu/displacement/e" />
+                <remap from="setpoint" to="/pid/body_neu/setpoint/e" />
+                <remap from="control_effort" to="control_effort/e" />
+                <remap from="pid_enable" to="pid_enable/e" />
+                <!--remap from="reconfigure_topic" to="reconfigure_topic/e" /-->
+                <param name="reconfigure_topic" value="reconfigure_topic/e" />
+        </node>
+        <node name="velocity_up" pkg="pid" type="controller" ns="pid" output="screen" >
+                <param name="node_name" value="velocity_up" />
+                <!--param name="Kp" value="-0.4" />
+                <param name="Ki" value="-0.0" />
+                <param name="Kd" value="-0.3" /-->
+                <param name="Kp" value="-0.6" />
+                <param name="Ki" value="-0.0" />
+                <param name="Kd" value="-0.5" />
+                <param name="upper_limit" value="1" />
+                <param name="lower_limit" value="-1" />
+                <param name="windup_limit" value="1" />
+                <param name="max_loop_frequency" value="100.0" />
+                <param name="min_loop_frequency" value="100.0" />
+                <remap from="state" to="/landing_pad/body_neu/displacement/u" />
+                <remap from="setpoint" to="/pid/body_neu/setpoint/u" />
+                <remap from="control_effort" to="control_effort/u" />
+                <remap from="pid_enable" to="pid_enable/u" />
+                <!--remap from="reconfigure_topic" to="reconfigure_topic/u" /-->
+                <param name="reconfigure_topic" value="reconfigure_topic/u" />
+        </node>
+        <node name="velocity_yaw" pkg="pid" type="controller" ns="pid" output="screen" >
+                <param name="node_name" value="velocity_yaw" />
+                <param name="Kp" value="1.5" />
+                <param name="Ki" value="0.0" />
+                <param name="Kd" value="0.1" />
+                <param name="upper_limit" value="1" />
+                <param name="lower_limit" value="-1" />
+                <param name="windup_limit" value="1" />
+                <param name="max_loop_frequency" value="100.0" />
+                <param name="min_loop_frequency" value="100.0" />
+                <remap from="state" to="/landing_pad/yaw_displacement" />
+                <remap from="setpoint" to="/pid/body_neu/setpoint/yaw_rate" />
+                <remap from="control_effort" to="control_effort/yaw_rate" />
+                <remap from="pid_enable" to="pid_enable/yaw_rate" />
+                <!--param name="reverse_acting" value="true" /-->
+                <!--remap from="reconfigure_topic" to="reconfigure_topic/yaw" /-->
+                <param name="reconfigure_topic" value="reconfigure_topic/yaw" />
+        </node>
 
-		<param name="useGui" value="$(arg useGui)"/>
-		<param name="idBits" value="$(arg idBits)"/>
-		<param name="idSamples" value="$(arg idSamples)"/>
-		<param name="hammingDist" value="$(arg hammingDist)"/>
-		<param name="maxMarkers" value="$(arg maxMarkers)"/>
-
-	</node>
-
-	<!-- *********************************************************************** -->
-
-	<node pkg="gimbal_controller" type="gimbal_controller" name="gimbal_controller_node" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" output="screen">
-	</node>
-	
-	<!-- *********************************************************************** -->
-	
         <arg name="fcu_url" default="udp://127.0.0.1:14551@14555" />
         <arg name="gcs_url" default="" />
         <arg name="tgt_system" default="1" />
@@ -60,7 +103,6 @@
 	
 	<!-- *********************************************************************** -->
 
-	<node pkg="landing_controller" type="landing_controller" name="landing_controller_node" output="screen" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" >
-	</node>
+	<node pkg="landing_controller" type="landing_controller" name="landing_controller_node" output="screen" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" />
 
 </launch>
