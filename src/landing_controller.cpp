@@ -39,136 +39,11 @@ geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & _
 
 // ( ͡° ͜ʖ ͡°)
 
-/*
-void link_states_callback(const gazebo_msgs::LinkStates::ConstPtr& msg)
-{
-	int i = 0;
-	while( i < msg->name.size() && msg->name[i] != "iris_demo::iris_demo::gimbal_small_2d::tilt_link")
-	{
-		i ++;
-	}
-
-	camera_twist = msg->twist[i];
-
-	i = 0;
-	while( i < msg->name.size() && msg->name[i] != "landing_pad_combo::landing_pad::link" )
-	{
-		i ++;
-	}
-
-	landing_pad_gazebo_pose  = msg->pose[i];
-	landing_pad_gazebo_twist = msg->twist[i];
-}
-
-void model_states_callback(const gazebo_msgs::ModelStates::ConstPtr& msg)
-{
-	int i = 0;
-	while( i < msg->name.size() && msg->name[i] != "iris_demo")
-	{
-		i ++;
-	}
-
-	iris_pose  = msg->pose[i];
-	iris_twist = msg->twist[i];
-
-	tf2::Quaternion rotation;
-	tf2::fromMsg(msg->pose[i].orientation, rotation);
-	tf2::Matrix3x3(rotation).getEulerYPR(iris_yaw, iris_pitch, iris_roll);
-}
-*/
-
 void local_position_pose_callback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
 	local_position_pose_stamped = *msg;
 }
 
-/*
-void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
-{
-	static tf2_ros::TransformBroadcaster transform_broadcaster;
-	geometry_msgs::TransformStamped transform_stamped_message;
-	transform_stamped_message.header.stamp = ros::Time::now();
-	transform_stamped_message.header.frame_id = "body_enu";
-	transform_stamped_message.child_frame_id = "global_enu";
-	
-	tf2::Quaternion orientation, yaw;
-	tf2::fromMsg(msg->orientation, orientation);
-//	orientation *= tf2::Quaternion(0, 0, 1, 0);
-	orientation = orientation.inverse();
-	geometry_msgs::Quaternion orientation_message = tf2::toMsg(orientation);
-
-//	transform_stamped_message.transform.translation.x = -iris_pose.position.x;
-//	transform_stamped_message.transform.translation.y = -iris_pose.position.y;
-//	transform_stamped_message.transform.translation.z = -iris_pose.position.z;
-
-	transform_stamped_message.transform.rotation = orientation_message;
-	transform_broadcaster.sendTransform(transform_stamped_message);
-}
-*/
-
-/*
-void control_effort_n_callback(const std_msgs::Float64::ConstPtr &msg)
-{
-	target_velocity.y = msg->data;
-}
-
-void control_effort_e_callback(const std_msgs::Float64::ConstPtr &msg)
-{
-	target_velocity.x = msg->data;
-}
-
-void control_effort_u_callback(const std_msgs::Float64::ConstPtr &msg)
-{
-	target_velocity.z = msg->data;
-}
-
-void control_effort_yaw_callback(const std_msgs::Float64::ConstPtr &msg)
-{
-	target_yaw_rate = msg->data;
-}
-
-void yaw_displacement_callback(const std_msgs::Float64::ConstPtr &msg)
-{
-	yaw_displacement = msg->data;
-}
-
-void pid_parameters_1_callback(const geometry_msgs::Vector3::ConstPtr &msg)
-{
-	pid_parameters_1.x = msg->x;
-	pid_parameters_1.y = msg->y;
-	pid_parameters_1.z = msg->z;
-
-	ROS_INFO("Reconfiguring pid parameters to (%0.2f %0.2f %0.2f) for phase 1.", msg->x, msg->y, msg->z);
-}
-
-void pid_parameters_2_callback(const geometry_msgs::Vector3::ConstPtr &msg)
-{
-	pid_parameters_2.x = msg->x;
-	pid_parameters_2.y = msg->y;
-	pid_parameters_2.z = msg->z;
-
-	ROS_INFO("Reconfiguring pid parameters to (%0.2f %0.2f %0.2f) for phase 2.", msg->x, msg->y, msg->z);
-}
-
-void pid_parameters_3_callback(const geometry_msgs::Vector3::ConstPtr &msg)
-{
-	pid_parameters_3.x = msg->x;
-	pid_parameters_3.y = msg->y;
-	pid_parameters_3.z = msg->z;
-
-	ROS_INFO("Reconfiguring pid parameters to (%0.2f %0.2f %0.2f) for phase 3.", msg->x, msg->y, msg->z);
-}
-
-void pid_parameters_u_callback(const geometry_msgs::Vector3::ConstPtr &msg)
-{
-	pid_parameters_u.x = msg->x;
-	pid_parameters_u.y = msg->y;
-	pid_parameters_u.z = msg->z;
-
-	pid_reconfigure_u_publisher.publish(pid_parameters_u);
-	ROS_INFO("Reconfiguring pid parameters to (%0.2f %0.2f %0.2f) for up dimension.", msg->x, msg->y, msg->z);
-}
-*/
 void landing_pad_camera_pose_callback(const geometry_msgs::PoseStamped::ConstPtr msg)
 {
 	landing_pad_camera_pose = *msg;
@@ -299,7 +174,6 @@ void set_velocity_target_neu( geometry_msgs::Vector3 _target_velocity )
 	buffer.header.frame_id = "world";
 	buffer.coordinate_frame = 8; // FRAME_BODY_NED
 	buffer.type_mask = 4039; // ignore everything except velocity arguments x, y
-//	buffer.type_mask = 1991; // ignore everything except velocity arguments x, y
 
 	buffer.velocity.x = _target_velocity.x;
 	buffer.velocity.y = _target_velocity.y;
@@ -315,7 +189,6 @@ void set_velocity_target_neu( geometry_msgs::Vector3 _target_velocity, double _t
 	buffer.header.stamp = ros::Time::now();
 	buffer.header.frame_id = "world";
 	buffer.coordinate_frame = 8; // FRAME_BODY_NED
-//	buffer.type_mask = 4039; // ignore everything except velocity arguments x, y
 	buffer.type_mask = 1991; // ignore everything except velocity arguments x, y
 
 	buffer.velocity.x = _target_velocity.x;
@@ -402,30 +275,6 @@ int main(int argc, char** argv)
 	std_msgs_false.data = false;
 	std_msgs_zero.data  = 0;
 
-//	geometry_msgs::Vector3 pid_parameters;
-
-	/*
-	pid_parameters_1.x = -0.6;
-	pid_parameters_1.y = -0.0;
-	pid_parameters_1.z = -0.7;
-	pid_parameters_2.x = -0.5;
-	pid_parameters_2.y = -0.0;
-	pid_parameters_2.z = -0.8;
-	pid_parameters_3.x = -0.3;
-	pid_parameters_3.y = -0.0;
-	pid_parameters_3.z = -9.5;
-	*/
-/*	
-	pid_parameters_1.x = -0.3;
-	pid_parameters_1.y = -0.1;
-	pid_parameters_1.z = -0.0;
-	pid_parameters_2.x = -0.3;
-	pid_parameters_2.y = -0.1;
-	pid_parameters_2.z = -0.0;
-	pid_parameters_3.x = -0.3;
-	pid_parameters_3.y = -0.1;
-	pid_parameters_3.z = -0.0;
-*/
 	// create node handle
 	ros::NodeHandle node_handle;
 	
