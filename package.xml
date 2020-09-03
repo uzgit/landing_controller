@@ -50,16 +50,10 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>gimbal_controller</build_depend>
-  <build_depend>mavros</build_depend>
-  <build_depend>mavros_msgs</build_depend>
   <build_depend>whycon_ros</build_depend>
   <build_export_depend>gimbal_controller</build_export_depend>
-  <build_export_depend>mavros</build_export_depend>
-  <build_export_depend>mavros_msgs</build_export_depend>
   <build_export_depend>whycon_ros</build_export_depend>
   <exec_depend>gimbal_controller</exec_depend>
-  <exec_depend>mavros</exec_depend>
-  <exec_depend>mavros_msgs</exec_depend>
   <exec_depend>whycon_ros</exec_depend>
 
 

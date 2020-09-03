@@ -71,7 +71,11 @@ int LANDING_PHASE;
 
 double plane_distance_to_landing_pad = std::nan("1");
 bool ENABLE_LANDING = false;
+std_msgs::Bool ENABLE_LANDING_msg;
 const int ENABLE_LANDING_CHANNEL = 10; // (1-based indexing)
+
+std_msgs::UInt8 LANDING_PHASE_msg;
+std_msgs::Float64 plane_distance_to_landing_pad_msg;
 
 bool within_descent_region = false;
 

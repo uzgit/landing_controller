@@ -9,8 +9,6 @@ project(landing_controller)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   gimbal_controller
-  mavros
-  mavros_msgs
   tf2_ros
   whycon_ros
 )
@@ -107,7 +105,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES landing_controller
-  CATKIN_DEPENDS gimbal_controller mavros mavros_msgs whycon_ros
+  CATKIN_DEPENDS gimbal_controller whycon_ros
   #  DEPENDS system_lib
 )
 

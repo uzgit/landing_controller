@@ -65,7 +65,8 @@ void mavros_state_callback(const mavros_msgs::State::ConstPtr msg)
 		ENABLE_LANDING = false;
 	}
 
-	enable_landing_publisher.publish(ENABLE_LANDING);
+	ENABLE_LANDING_msg.data = ENABLE_LANDING;
+	enable_landing_publisher.publish(ENABLE_LANDING_msg);
 }
 
 /*
@@ -332,7 +333,8 @@ int main(int argc, char** argv)
 
 			// calculate x/y distance to landing pad (leave out altitude)
 			plane_distance_to_landing_pad = plane_distance_to( landing_pad_relative_pose_stamped );
-			plane_displacement_publisher.publish( plane_distance_to_landing_pad );
+			plane_distance_to_landing_pad_msg.data = plane_distance_to_landing_pad;
+			plane_displacement_publisher.publish( plane_distance_to_landing_pad_msg );
 			
 			// determine maximum x/y distance to landing pad within which the drone is allowed to descend according to the descent region
 			descent_distance = 0.24 * exp(0.36 * abs( landing_pad_relative_pose_stamped.pose.position.z ));
@@ -377,7 +379,8 @@ int main(int argc, char** argv)
 			stay_still();
 		}
 
-		landing_phase_publisher.publish(LANDING_PHASE);
+		LANDING_PHASE_msg.data = LANDING_PHASE;
+		landing_phase_publisher.publish(LANDING_PHASE_msg);
 		loop_rate.sleep();
 	}
 
