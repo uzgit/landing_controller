@@ -8,9 +8,9 @@ project(landing_controller)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  apriltag_ros
   gimbal_controller
   tf2_ros
-  whycon_ros
 )
 
 ## System dependencies are found with CMake's conventions

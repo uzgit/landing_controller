@@ -23,6 +23,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
+#include <apriltag_ros/AprilTagDetectionArray.h>
 
 ros::Publisher landing_phase_publisher;
 ros::Publisher landing_pad_camera_pose_publisher;

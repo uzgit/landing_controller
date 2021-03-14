@@ -1,11 +1,12 @@
 <?xml version="1.0"?>
 <launch>
 
-	<arg name="fontPath" value="$(find whycon_ros)/etc/font.ttf"/>
-	<arg name="calibDefPath" value="$(find whycon_ros)/etc/default.cal"/>
+	<arg name="fontPath" value="$(find whycon)/etc/font.ttf"/>
+	<arg name="calibDefPath" value="$(find whycon)/etc/default.cal"/>
 
-	<include file="$(find whycon_ros)/launch/whycon_sitl.launch" />
-	<include file="$(find gimbal_controller)/launch/sitl.launch" />
+	<!--include file="$(find whycon)/launch/whycon_sitl.launch" /-->
+	<include file="$(find apriltag_ros)/launch/sitl.launch" />
+	<include file="$(find gimbal_controller)/launch/sitl_companion_board.launch" />
 
         <arg name="fcu_url" default="udp://127.0.0.1:14551@14555" />
         <arg name="gcs_url" default="" />
