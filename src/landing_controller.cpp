@@ -11,7 +11,7 @@ void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray::Cons
 
 	if( i < msg->detections.size () )
 	{
-		landing_pad_relative_pose_stamped.pose.position = msg->detections[i].camera_translation_enu;
+		landing_pad_relative_pose_stamped.pose.position = msg->detections[i].position_target_enu;
 		yaw_displacement = msg->detections[i].yaw;
 
 		landing_pad_relative_pose_stamped.header.stamp = ros::Time::now();
