@@ -12,14 +12,19 @@ void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray::Cons
 	if( i < msg->detections.size () )
 	{
 		landing_pad_relative_pose_stamped.pose.position = msg->detections[i].position_target_enu;
-		yaw_displacement = msg->detections[i].yaw;
+		yaw_displacement = msg->detections[i].yaw - M_PI_2;
 
 		landing_pad_relative_pose_stamped.header.stamp = ros::Time::now();
 		landing_pad_relative_pose_stamped_publisher.publish( landing_pad_relative_pose_stamped );
+
+		std_msgs_float64_msg.data = msg->detections[i].c_normalized[0];
+		landing_pad_pixel_displacement_x_publisher.publish( std_msgs_float64_msg );
+		std_msgs_float64_msg.data = msg->detections[i].c_normalized[1];
+		landing_pad_pixel_displacement_y_publisher.publish( std_msgs_float64_msg );
 	}
 }
 
-void mavros_state_callback(const mavros_msgs::State::ConstPtr msg)
+void mavros_state_callback( const mavros_msgs::State::ConstPtr msg )
 {
 	if( msg->connected && msg->armed && msg->guided )
 	{
@@ -32,6 +37,11 @@ void mavros_state_callback(const mavros_msgs::State::ConstPtr msg)
 
 	ENABLE_LANDING_msg.data = ENABLE_LANDING;
 	enable_landing_publisher.publish(ENABLE_LANDING_msg);
+}
+
+void yaw_tracking_control_effort_callback( const std_msgs::Float64::ConstPtr msg )
+{
+	yaw_tracking_control_effort = msg->data;
 }
 
 /*
@@ -80,6 +90,27 @@ float32 yaw
 float32 yaw_rate
 */
 
+void set_position_target_slow_descend( geometry_msgs::Point target_position, double descent_rate )
+{
+	if( descent_rate < 0 )
+	{
+		ROS_INFO("descending slowly");
+		mavros_msgs::PositionTarget buffer;
+
+		buffer.header.stamp = ros::Time::now();
+		buffer.header.frame_id = "world";
+		buffer.coordinate_frame = 9;
+
+		buffer.type_mask = 4088;
+
+		buffer.position.x = target_position.y;
+		buffer.position.y = -target_position.x;
+		buffer.position.z = descent_rate;
+
+		setpoint_raw_local_publisher.publish(buffer);
+	}
+}
+
 // set 3D position target with respect to the drone's ENU frame
 void set_position_target_neuy( geometry_msgs::Point target_position, double yaw )
 {
@@ -94,6 +125,8 @@ void set_position_target_neuy( geometry_msgs::Point target_position, double yaw 
 	buffer.position.x = target_position.y;
 	buffer.position.y = -target_position.x;
 	buffer.position.z = target_position.z;
+
+	buffer.yaw = yaw;
 
 	setpoint_raw_local_publisher.publish(buffer);
 }
@@ -112,6 +145,28 @@ void set_position_target_ney( geometry_msgs::Point target_position, double yaw )
 	buffer.position.x = target_position.y;
 	buffer.position.y = -target_position.x;
 	buffer.position.z = 0;
+
+	buffer.yaw = yaw;
+
+	setpoint_raw_local_publisher.publish(buffer);
+}
+
+// set position target without changing altitude
+void set_position_target_neyr( geometry_msgs::Point target_position, double yaw_rate )
+{
+	mavros_msgs::PositionTarget buffer;
+
+	buffer.header.stamp = ros::Time::now();
+	buffer.header.frame_id = "world";
+	buffer.coordinate_frame = 9;
+
+	buffer.type_mask = 2040;
+
+	buffer.position.x = target_position.y;
+	buffer.position.y = -target_position.x;
+	buffer.position.z = 0;
+
+	buffer.yaw_rate = yaw_rate;
 
 	setpoint_raw_local_publisher.publish(buffer);
 }
@@ -273,7 +328,7 @@ int main(int argc, char** argv)
 //	ros::Subscriber landing_pad_camera_pose_subscriber = node_handle.subscribe("/landing_pad/camera_pose", 1000, landing_pad_camera_pose_callback);
 //	ros::Subscriber local_position_pose_subscriber = node_handle.subscribe("/mavros/local_position/pose", 1000, local_position_pose_callback);
 	ros::Subscriber apriltag3_subscriber = node_handle.subscribe("/tag_detections", 1000, apriltag3_visual_callback);
-
+	ros::Subscriber yaw_tracking_control_effort_subscriber = node_handle.subscribe("landing_pad/pixel_displacement/x/control_effort", 1000, yaw_tracking_control_effort_callback);
 	//**************************************************************************************************************************
 	ros::Subscriber mavros_state_subscriber = node_handle.subscribe("/mavros/state", 1000, mavros_state_callback);
 //	ros::Subscriber landing_enable_subscriber = node_handle.subscribe("/mavros/rc/out", 1000, landing_enable_callback);
@@ -286,6 +341,11 @@ int main(int argc, char** argv)
 	landing_pad_relative_pose_stamped_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/relative_pose_stamped", 1000);
 	plane_displacement_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/plane_displacement", 1000);
 	setpoint_raw_local_publisher = node_handle.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 1000);
+
+	landing_pad_pixel_displacement_x_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_displacement/x", 1000);
+	landing_pad_pixel_displacement_y_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_displacement/y", 1000);
+	landing_pad_yaw_tracking_pid_enable_publisher = node_handle.advertise<std_msgs::Bool>("/landing_pad/pixel_displacement/x/enable", 1000);
+	landing_pad_yaw_tracking_pid_setpoint_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_displacement/x/setpoint", 1000);
 
 	LANDING_PHASE = NOT_LANDING;
 
@@ -307,6 +367,8 @@ int main(int argc, char** argv)
 			descent_distance = 0.1 * exp(0.36 * abs( landing_pad_relative_pose_stamped.pose.position.z ));
 			
 			within_descent_region = plane_distance_to_landing_pad < descent_distance;
+			
+			double height = abs( landing_pad_relative_pose_stamped.pose.position.z );
 
 			// **************************
 			// * landing control policy *
@@ -314,29 +376,45 @@ int main(int argc, char** argv)
 			// if we are in landing mode then we can act according to the landing control policy
 			if( ENABLE_LANDING )
 			{
+				landing_pad_yaw_tracking_pid_setpoint_publisher.publish( std_msgs_zero );
 
-				if( within_descent_region && abs( landing_pad_relative_pose_stamped.pose.position.z ) < 0.3 )
+				if( within_descent_region && abs( landing_pad_relative_pose_stamped.pose.position.z ) < 0.15 && LANDING_PHASE >= LANDED )
 				{
 					LANDING_PHASE = LANDED;
 					
+//					set_position_target_slow_descend( landing_pad_relative_pose_stamped.pose.position, -0.025 );
+					
 					// clamp to ground
-					set_velocity_target_neu(0, 0, -0.1, 0);
+					set_velocity_target_neu(0, 0, -0.01, 0);
 				}
-				else if( plane_distance_to_landing_pad <= descent_distance )
+				else if( plane_distance_to_landing_pad <= descent_distance && LANDING_PHASE >= DESCENT )
 				{
 					LANDING_PHASE = DESCENT;
+					
+					landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_false );
 
 					// approach in 3D
-					set_position_target_neu( landing_pad_relative_pose_stamped.pose.position );
-//					set_position_target_neuy( landing_pad_relative_pose_stamped.pose.position, -yaw_displacement );
+					if( abs(yaw_displacement) > 0.075 && height > 2.5 )
+					{
+						set_position_target_neuy( landing_pad_relative_pose_stamped.pose.position, -yaw_displacement );
+					}
+					else
+					{
+						set_position_target_slow_descend( landing_pad_relative_pose_stamped.pose.position, -0.1 );
+					}
 				}
 				else
 				{
 					LANDING_PHASE = APPROACH;
-
+/*
+					if( plane_distance_to_landing_pad >= 10 * descent_distance )
+					{
+						landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_true );
+					}
+*/
 					// approach in the plane
-					set_position_target_ne(landing_pad_relative_pose_stamped.pose.position);
-//					set_position_target_ney(landing_pad_relative_pose_stamped.pose.position, -yaw_displacement );
+					set_position_target_neyr( landing_pad_relative_pose_stamped.pose.position, 0 );
+//					set_position_target_ney( landing_pad_relative_pose_stamped.pose.position, yaw_tracking_control_effort );
 				}
 			}
 		}
@@ -344,6 +422,8 @@ int main(int argc, char** argv)
 		{
 			// abort the landing
 			LANDING_PHASE = NOT_LANDING;
+			
+			landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_false );
 
 			// stop the drone from moving
 			stay_still();

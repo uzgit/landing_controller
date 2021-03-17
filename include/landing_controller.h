@@ -31,10 +31,15 @@ ros::Publisher landing_pad_relative_pose_stamped_publisher;
 ros::Publisher plane_displacement_publisher;
 ros::Publisher setpoint_raw_local_publisher;
 ros::Publisher enable_landing_publisher;
+ros::Publisher landing_pad_pixel_displacement_x_publisher;
+ros::Publisher landing_pad_yaw_tracking_pid_enable_publisher;
+ros::Publisher landing_pad_pixel_displacement_y_publisher;
+ros::Publisher landing_pad_yaw_tracking_pid_setpoint_publisher;
 
 std_msgs::Float64 std_msgs_zero;
 std_msgs::Bool std_msgs_true;
 std_msgs::Bool std_msgs_false;
+std_msgs::Float64 std_msgs_float64_msg;
 
 geometry_msgs::PoseStamped landing_pad_camera_pose;
 geometry_msgs::PoseStamped landing_pad_whycon_pose;
@@ -44,6 +49,7 @@ geometry_msgs::PoseStamped local_position_pose_stamped;
 geometry_msgs::Vector3 target_velocity;
 double target_yaw_rate = 0;
 double yaw_displacement = std::nan("1");
+double yaw_tracking_control_effort = 0;
 
 tf2_ros::Buffer transform_buffer;
 
