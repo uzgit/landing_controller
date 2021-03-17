@@ -31,20 +31,20 @@
 	
 	<!-- *********************************************************************** -->
 
-        <node respawn="true" name="pid_x" pkg="pid" type="controller" ns="pid" output="log">
-                <param name="node_name" value="pid_x"/>
-                <param name="Kp" value="-0.25"/>
-                <param name="Ki" value="-0.00"/>
-                <param name="Kd" value="-0.025"/>
-                <param name="upper_limit" value="0.3"/>
-                <param name="lower_limit" value="-0.3"/>
-                <param name="windup_limit" value="0"/>
+        <node respawn="true" name="pid_yaw" pkg="pid" type="controller" output="log">
+                <param name="node_name" value="pid_yaw"/>
+                <param name="Kp" value="0.50"/>
+                <param name="Ki" value="0.05"/>
+                <param name="Kd" value="0.01"/>
+                <param name="upper_limit" value="0.75"/>
+                <param name="lower_limit" value="-0.75"/>
+		<param name="windup_limit" value="0.2"/>
                 <param name="max_loop_frequency" value="100.0"/>
                 <param name="min_loop_frequency" value="100.0"/>
-                <remap from="state" to="/landing_pad/pixel_displacement/x"/>
-                <remap from="setpoint" to="landing_pad/pixel_displacement/x/setpoint"/>
-                <remap from="control_effort" to="landing_pad/pixel_displacement/x/control_effort"/>
-                <remap from="pid_enable" to="/landing_pad/pixel_displacement/x/enable"/>
+		<remap from="state" to="/pid/landing_pad/pixel_displacement/x"/>
+		<remap from="setpoint" to="/pid/landing_pad/pixel_displacement/x/setpoint"/>
+		<remap from="control_effort" to="/pid/landing_pad/pixel_displacement/x/control_effort"/>
+		<remap from="pid_enable" to="/pid/landing_pad/pixel_displacement/x/enable"/>
                 <param name="reconfigure_topic" value="reconfigure_topic/x"/>
         </node>
 

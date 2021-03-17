@@ -56,6 +56,7 @@ tf2_ros::Buffer transform_buffer;
 // timing
 ros::Time last_detection_time(0);
 ros::Duration abort_time(0.5);
+ros::Duration flex_time(3.0);
 
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & );
 void control_effort_n_callback( const std_msgs::Float64::ConstPtr );
