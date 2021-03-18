@@ -7,7 +7,7 @@ using namespace std;
 void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray::ConstPtr msg )
 {
 	int i = 0;
-	while( i < msg->detections.size() && msg->detections[i].name != "landing_pad" ) i ++;
+	while( i < msg->detections.size() && (msg->detections[i].name.find("landing_pad") == std::string::npos) ) i ++;
 
 	if( i < msg->detections.size () )
 	{
@@ -41,7 +41,6 @@ void mavros_state_callback( const mavros_msgs::State::ConstPtr msg )
 
 void yaw_tracking_control_effort_callback( const std_msgs::Float64::ConstPtr msg )
 {
-	ROS_INFO("GOT CONTROL EFFORT");
 	yaw_tracking_control_effort = msg->data;
 }
 
@@ -286,7 +285,7 @@ void descend_in_place()
 	buffer.coordinate_frame = 8; // FRAME_BODY_NED
 	buffer.type_mask = 4039; // ignore everything except z velocity
 
-	buffer.velocity.z = -0.1;
+	buffer.velocity.z = -0.05;
 
 	setpoint_raw_local_publisher.publish(buffer);
 }
@@ -381,21 +380,17 @@ int main(int argc, char** argv)
 			{
 				if( within_descent_region && abs( landing_pad_relative_pose_stamped.pose.position.z ) < 0.15 && LANDING_PHASE >= LANDED )
 				{
+					ROS_INFO("LANDED");
 					LANDING_PHASE = LANDED;
 					
-//					set_position_target_slow_descend( landing_pad_relative_pose_stamped.pose.position, -0.025 );
-					
 					// clamp to ground
-//					set_velocity_target_neu(0, 0, -0.01, 0);
 					descend_in_place();
 				}
-				else if( plane_distance_to_landing_pad <= descent_distance && LANDING_PHASE >= DESCENT )
+				else if( within_descent_region && LANDING_PHASE >= DESCENT )
 				{
 					ROS_INFO("DESCENT");
 					LANDING_PHASE = DESCENT;
 					
-//					set_position_target_slow_descend( landing_pad_relative_pose_stamped.pose.position, -0.1 );
-
 					// approach in 3D
 					if( abs(std_msgs_float64_msg.data) <= 0.2 && abs(yaw_displacement) > 0.075 && height > 2.5 )
 					{
@@ -407,50 +402,21 @@ int main(int argc, char** argv)
 					}
 					landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_false );
 				}
-				else
+				else // approach in the plane at current altitude
 				{
 					ROS_INFO("APPROACH");
 					LANDING_PHASE = APPROACH;
 					landing_pad_yaw_tracking_pid_setpoint_publisher.publish( std_msgs_zero );
 					landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_true );
-//					set_position_target_ney( landing_pad_relative_pose_stamped.pose.position, yaw_tracking_control_effort );
 
-					ROS_INFO_STREAM("yaw control effort: " << yaw_tracking_control_effort);
-/*
-					if( plane_distance_to_landing_pad >= 10 * descent_distance )
-					{
-						landing_pad_yaw_tracking_pid_setpoint_publisher.publish( std_msgs_zero );
-						landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_true );
-					}
-					else
-					{
-						landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_false );
-					}
-*/					
 					if( height > 5  && abs(std_msgs_float64_msg.data) > 0.1 )
 					{
 						set_position_target_neyr( landing_pad_relative_pose_stamped.pose.position, yaw_tracking_control_effort );
 					}
 					else
 					{
-						set_position_target_neuy( landing_pad_relative_pose_stamped.pose.position, -yaw_displacement );
+						set_position_target_ney( landing_pad_relative_pose_stamped.pose.position, -yaw_displacement );
 					}
-					// approach in the plane
-/*					
-					if( abs(std_msgs_float64_msg.data) > 0.2 )
-					{
-						geometry_msgs::Point nothing;
-						nothing.x = 0;
-						nothing.y = 0;
-						nothing.z = 0;
-						set_position_target_neyr( nothing, -yaw_tracking_control_effort );
-//						set_position_target_ney( landing_pad_relative_pose_stamped.pose.position, yaw_tracking_control_effort );
-					}
-					else
-					{
-						set_position_target_neyr( landing_pad_relative_pose_stamped.pose.position, 0 );
-					}
-*/
 				}
 			}
 		}
