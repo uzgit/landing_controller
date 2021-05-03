@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <launch>
 
-	<include file="$(find apriltag_ros)/launch/sitl.launch" />
-	<include file="$(find gimbal_controller)/launch/sitl_companion_board.launch" />
+	<!--include file="$(find apriltag_ros)/launch/sitl.launch" /-->
+	<include file="$(find gimbal_controller)/launch/sitl.launch" />
 
         <arg name="fcu_url" default="udp://127.0.0.1:14551@14555" />
         <arg name="gcs_url" default="" />
