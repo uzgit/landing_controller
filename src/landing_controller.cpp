@@ -12,15 +12,15 @@ void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray::Cons
 	if( i < msg->detections.size () )
 	{
 		landing_pad_relative_pose_stamped.pose.position = msg->detections[i].position_target_enu;
-		yaw_displacement = msg->detections[i].yaw - M_PI_2;
+		yaw_displacement = msg->detections[i].yaw;// - M_PI_2;
 
 		landing_pad_relative_pose_stamped.header.stamp = ros::Time::now();
 		landing_pad_relative_pose_stamped_publisher.publish( landing_pad_relative_pose_stamped );
 
 		std_msgs_float64_msg.data = msg->detections[i].c_normalized[0];
 		landing_pad_pixel_displacement_x_publisher.publish( std_msgs_float64_msg );
-//		std_msgs_float64_msg.data = msg->detections[i].c_normalized[1];
-//		landing_pad_pixel_displacement_y_publisher.publish( std_msgs_float64_msg );
+
+		position_target = msg->detections[i].position_target_enu;
 	}
 }
 
@@ -42,6 +42,20 @@ void mavros_state_callback( const mavros_msgs::State::ConstPtr msg )
 void yaw_tracking_control_effort_callback( const std_msgs::Float64::ConstPtr msg )
 {
 	yaw_tracking_control_effort = msg->data;
+}
+
+double constrain(const double input, double minimum, double maximum)
+{
+	double result = input;
+	if( result < minimum )
+	{
+		result = minimum;
+	}
+	else if( result > maximum )
+	{
+		result = maximum;
+	}
+	return result;
 }
 
 /*
@@ -92,22 +106,19 @@ float32 yaw_rate
 
 void set_position_target_slow_descend( geometry_msgs::Point target_position, double descent_rate )
 {
-	if( descent_rate < 0 )
-	{
-		mavros_msgs::PositionTarget buffer;
+	mavros_msgs::PositionTarget buffer;
 
-		buffer.header.stamp = ros::Time::now();
-		buffer.header.frame_id = "world";
-		buffer.coordinate_frame = 9;
+	buffer.header.stamp = ros::Time::now();
+	buffer.header.frame_id = "world";
+	buffer.coordinate_frame = 9;
 
-		buffer.type_mask = 4088;
+	buffer.type_mask = 4088;
 
-		buffer.position.x = target_position.y;
-		buffer.position.y = -target_position.x;
-		buffer.position.z = descent_rate;
+	buffer.position.x = target_position.y;
+	buffer.position.y = -target_position.x;
+	buffer.position.z = descent_rate;
 
-		setpoint_raw_local_publisher.publish(buffer);
-	}
+	setpoint_raw_local_publisher.publish(buffer);
 }
 
 // set 3D position target with respect to the drone's ENU frame
@@ -365,12 +376,20 @@ int main(int argc, char** argv)
 			plane_distance_to_landing_pad_msg.data = plane_distance_to_landing_pad;
 			plane_displacement_publisher.publish( plane_distance_to_landing_pad_msg );
 			
-			// determine maximum x/y distance to landing pad within which the drone is allowed to descend according to the descent region
-			descent_distance = 0.05 * exp(0.36 * abs( landing_pad_relative_pose_stamped.pose.position.z ));
-			
-			within_descent_region = plane_distance_to_landing_pad < descent_distance;
-			
 			height = abs( landing_pad_relative_pose_stamped.pose.position.z );
+			
+			// determine maximum x/y distance to landing pad within which the drone is allowed to descend according to the descent region
+			descent_distance = 0.05 * exp(0.36 * height);
+			within_descent_region = plane_distance_to_landing_pad < descent_distance;
+		
+			yaw_target = -yaw_displacement;
+			if( abs(yaw_target) < 0.025 )
+			{
+				yaw_target = 0;
+			}
+
+			bool at_landing_height = height < 0.15;
+			bool in_final_descent = height < 2.5;
 
 			// **************************
 			// * landing control policy *
@@ -378,7 +397,7 @@ int main(int argc, char** argv)
 			// if we are in landing mode then we can act according to the landing control policy
 			if( ENABLE_LANDING )
 			{
-				if( within_descent_region && abs( landing_pad_relative_pose_stamped.pose.position.z ) < 0.15 && LANDING_PHASE >= LANDED )
+				if( within_descent_region && at_landing_height && LANDING_PHASE >= LANDED )
 				{
 					ROS_INFO("LANDED");
 					LANDING_PHASE = LANDED;
@@ -388,18 +407,23 @@ int main(int argc, char** argv)
 				}
 				else if( within_descent_region && LANDING_PHASE >= DESCENT )
 				{
-					ROS_INFO("DESCENT");
-					LANDING_PHASE = DESCENT;
-					
-					// approach in 3D
-					if( abs(std_msgs_float64_msg.data) <= 0.2 && abs(yaw_displacement) > 0.075 && height > 2.5 )
+					if( in_final_descent )
 					{
-						set_position_target_neuy( landing_pad_relative_pose_stamped.pose.position, -yaw_displacement );
+						ROS_INFO("FINAL DESCENT");
 					}
 					else
 					{
-						set_position_target_slow_descend( landing_pad_relative_pose_stamped.pose.position, -0.1 );
+						ROS_INFO("DESCENT");
 					}
+
+					LANDING_PHASE = DESCENT;
+
+					if( in_final_descent )
+					{
+						position_target.z = constrain( position_target.z, -0.1, 0 );
+					}
+
+					set_position_target_neuy( position_target, yaw_target );
 					landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_false );
 				}
 				else // approach in the plane at current altitude
@@ -409,13 +433,13 @@ int main(int argc, char** argv)
 					landing_pad_yaw_tracking_pid_setpoint_publisher.publish( std_msgs_zero );
 					landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_true );
 
-					if( height > 5  && abs(std_msgs_float64_msg.data) > 0.1 )
+					if( height > 5 && abs(std_msgs_float64_msg.data) > 0.1 )
 					{
-						set_position_target_neyr( landing_pad_relative_pose_stamped.pose.position, yaw_tracking_control_effort );
+						set_position_target_neyr( position_target, yaw_tracking_control_effort );
 					}
 					else
 					{
-						set_position_target_ney( landing_pad_relative_pose_stamped.pose.position, -yaw_displacement );
+						set_position_target_ney( position_target, yaw_target );
 					}
 				}
 			}

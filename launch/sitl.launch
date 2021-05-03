@@ -1,10 +1,6 @@
 <?xml version="1.0"?>
 <launch>
 
-	<arg name="fontPath" value="$(find whycon)/etc/font.ttf"/>
-	<arg name="calibDefPath" value="$(find whycon)/etc/default.cal"/>
-
-	<!--include file="$(find whycon)/launch/whycon_sitl.launch" /-->
 	<include file="$(find apriltag_ros)/launch/sitl.launch" />
 	<include file="$(find gimbal_controller)/launch/sitl_companion_board.launch" />
 
@@ -48,6 +44,6 @@
                 <param name="reconfigure_topic" value="reconfigure_topic/x"/>
         </node>
 
-	<node pkg="landing_controller" type="landing_controller" name="landing_controller_node" output="screen" args="$(arg fontPath) $(arg calibDefPath)" launch-prefix="" required="true" />
+	<node pkg="landing_controller" type="landing_controller" name="landing_controller_node" output="screen" launch-prefix="" required="true" />
 
 </launch>

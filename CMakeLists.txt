@@ -105,7 +105,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES landing_controller
-  CATKIN_DEPENDS gimbal_controller whycon_ros
+  CATKIN_DEPENDS gimbal_controller 
   #  DEPENDS system_lib
 )
 

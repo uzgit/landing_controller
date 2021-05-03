@@ -41,8 +41,8 @@ std_msgs::Bool std_msgs_true;
 std_msgs::Bool std_msgs_false;
 std_msgs::Float64 std_msgs_float64_msg;
 
+geometry_msgs::Point position_target;
 geometry_msgs::PoseStamped landing_pad_camera_pose;
-geometry_msgs::PoseStamped landing_pad_whycon_pose;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped;
 geometry_msgs::PoseStamped landing_pad_relative_pose_stamped_straightened;
 geometry_msgs::PoseStamped local_position_pose_stamped;
@@ -51,6 +51,8 @@ double target_yaw_rate = 0;
 double yaw_displacement = std::nan("1");
 double yaw_tracking_control_effort = 0;
 
+double yaw_target = 0;
+
 tf2_ros::Buffer transform_buffer;
 
 // timing
@@ -58,11 +60,11 @@ ros::Time last_detection_time(0);
 ros::Duration abort_time(0.5);
 ros::Duration flex_time(3.0);
 
+
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & );
 void control_effort_n_callback( const std_msgs::Float64::ConstPtr );
 void control_effort_e_callback( const std_msgs::Float64::ConstPtr );
 void control_effort_u_callback( const std_msgs::Float64::ConstPtr );
-void landing_pad_whycon_pose_callback(   const geometry_msgs::PoseStamped::ConstPtr );
 void landing_pad_camera_pose_callback(   const geometry_msgs::PoseStamped::ConstPtr );
 void set_velocity_target_neu( geometry_msgs::Vector3 );
 double plane_distance_to( geometry_msgs::PoseStamped );
