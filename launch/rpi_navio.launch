@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+
+	<include file="$(find gimbal_controller)/launch/rpi_navio.launch" />
+
+	<node pkg="landing_controller" type="landing_controller" name="landing_controller_node" output="screen" launch-prefix="" required="true" />
+
+</launch>
