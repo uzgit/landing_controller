@@ -379,7 +379,7 @@ int main(int argc, char** argv)
 			height = abs( landing_pad_relative_pose_stamped.pose.position.z );
 			
 			// determine maximum x/y distance to landing pad within which the drone is allowed to descend according to the descent region
-			descent_distance = 0.10 * exp(0.55 * height);
+			descent_distance = 0.06 * exp(0.9 * height);
 			within_descent_region = plane_distance_to_landing_pad < descent_distance;
 		
 			yaw_target = -yaw_displacement;
