@@ -52,13 +52,17 @@ double yaw_displacement = std::nan("1");
 double yaw_tracking_control_effort = 0;
 
 double yaw_target = 0;
+double normalized_pixel_displacement_x;
+
+double landing_radius = 0.06; 
+double descent_region_exponential_coefficient = 0.75;
 
 tf2_ros::Buffer transform_buffer;
 
 // timing
 ros::Time last_detection_time(0);
 ros::Duration abort_time(0.5);
-ros::Duration flex_time(3.0);
+ros::Duration flex_time(4.0);
 
 
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & );

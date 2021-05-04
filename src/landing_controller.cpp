@@ -17,7 +17,8 @@ void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray::Cons
 		landing_pad_relative_pose_stamped.header.stamp = ros::Time::now();
 		landing_pad_relative_pose_stamped_publisher.publish( landing_pad_relative_pose_stamped );
 
-		std_msgs_float64_msg.data = msg->detections[i].c_normalized[0];
+		normalized_pixel_displacement_x = msg->detections[i].c_normalized[0];
+		std_msgs_float64_msg.data = normalized_pixel_displacement_x;
 		landing_pad_pixel_displacement_x_publisher.publish( std_msgs_float64_msg );
 
 		position_target = msg->detections[i].position_target_enu;
@@ -379,7 +380,8 @@ int main(int argc, char** argv)
 			height = abs( landing_pad_relative_pose_stamped.pose.position.z );
 			
 			// determine maximum x/y distance to landing pad within which the drone is allowed to descend according to the descent region
-			descent_distance = 0.06 * exp(0.9 * height);
+
+			descent_distance = landing_radius * exp(descent_region_exponential_coefficient * height);
 			within_descent_region = plane_distance_to_landing_pad < descent_distance;
 		
 			yaw_target = -yaw_displacement;
@@ -433,18 +435,20 @@ int main(int argc, char** argv)
 					landing_pad_yaw_tracking_pid_setpoint_publisher.publish( std_msgs_zero );
 					landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_true );
 
-					if( height > 5 && abs(std_msgs_float64_msg.data) > 0.1 )
+					if( height < 5 || abs(normalized_pixel_displacement_x) < 0.1 )
 					{
-						set_position_target_neyr( position_target, yaw_tracking_control_effort );
+						ROS_INFO("YAW ALIGNMENT");
+						set_position_target_ney( position_target, yaw_target );
 					}
 					else
 					{
-						set_position_target_ney( position_target, yaw_target );
+						ROS_INFO("APPROACH");
+						set_position_target_neyr( position_target, yaw_tracking_control_effort );
 					}
 				}
 			}
 		}
-		else if( ros::Time::now() - landing_pad_relative_pose_stamped.header.stamp < flex_time && height < 1 )
+		else if( ros::Time::now() - landing_pad_relative_pose_stamped.header.stamp < flex_time && height < 0.5 )
 		{
 			descend_in_place();
 		}
