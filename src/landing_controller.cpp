@@ -399,68 +399,12 @@ int main(int argc, char** argv)
 			// if we are in landing mode then we can act according to the landing control policy
 			if( ENABLE_LANDING )
 			{
-				if( within_descent_region && at_landing_height && LANDING_PHASE >= LANDED )
-				{
-					ROS_INFO("LANDED");
-					LANDING_PHASE = LANDED;
-					
-					// clamp to ground
-					descend_in_place();
-				}
-				else if( within_descent_region && LANDING_PHASE >= DESCENT )
-				{
-					if( in_final_descent )
-					{
-						ROS_INFO("FINAL DESCENT");
-					}
-					else
-					{
-						ROS_INFO("DESCENT");
-					}
+				landing_pad_yaw_tracking_pid_setpoint_publisher.publish( std_msgs_zero );
+				landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_true );
 
-					LANDING_PHASE = DESCENT;
-
-					if( in_final_descent )
-					{
-						position_target.z = constrain( position_target.z, -0.1, 0 );
-					}
-
-					set_position_target_neuy( position_target, yaw_target );
-					landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_false );
-				}
-				else // approach in the plane at current altitude
-				{
-					ROS_INFO("APPROACH");
-					LANDING_PHASE = APPROACH;
-					landing_pad_yaw_tracking_pid_setpoint_publisher.publish( std_msgs_zero );
-					landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_true );
-
-					if( height < 5 || abs(normalized_pixel_displacement_x) < 0.1 )
-					{
-						ROS_INFO("YAW ALIGNMENT");
-						set_position_target_ney( position_target, yaw_target );
-					}
-					else
-					{
-						ROS_INFO("APPROACH");
-						set_position_target_neyr( position_target, yaw_tracking_control_effort );
-					}
-				}
+				ROS_INFO("APPROACH");
+				set_position_target_neyr( position_target, yaw_tracking_control_effort );
 			}
-		}
-		else if( ros::Time::now() - landing_pad_relative_pose_stamped.header.stamp < flex_time && height < 0.5 )
-		{
-			descend_in_place();
-		}
-		else if( LANDING_PHASE != NOT_LANDING ) // if the landing pad has just been lost from sight
-		{
-			// abort the landing
-			LANDING_PHASE = NOT_LANDING;
-			
-			landing_pad_yaw_tracking_pid_enable_publisher.publish( std_msgs_false );
-
-			// stop the drone from moving
-			stay_still();
 		}
 
 		LANDING_PHASE_msg.data = LANDING_PHASE;
